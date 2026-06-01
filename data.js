@@ -18,14 +18,13 @@ const COUNTRIES = [
   "Ghana", "India", "Indonesia", "Italy", "Japan", "Kazakhstan",
   "Malaysia", "Mexico", "Namibia", "Netherlands", "Nigeria", "Pakistan",
   "Saudi Arabia", "South Africa", "South Korea", "Tanzania", "Thailand",
-  "Ukraine", "United Kingdom", "USA", "Zambia", "Zimbabwe",
+  "Ukraine", "United Kingdom", "United States", "Zambia", "Zimbabwe",
 ];
 
 const COUNTRY_NORMALIZE = {
   "People's Republic of China": "China",
   "Democratic Republic of the Congo": "DR Congo",
   "United Republic of Tanzania": "Tanzania",
-  "United States of America": "USA",
-  "United States": "USA",
+  "United States of America": "United States",
   "Korea": "South Korea",
 };

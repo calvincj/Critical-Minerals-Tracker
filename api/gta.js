@@ -11,7 +11,7 @@ TITLE rules (strictly follow):
 - Must include ALL THREE: (1) country name, (2) action verb, (3) mineral name
 - Format: "[Country] [verb] [action] on [mineral]"
 - Use active verbs: imposes, bans, grants, enacts, restricts, exempts, awards, extends, requires, launches
-- Examples: "China Imposes Export Licensing Requirement on Graphite" / "Indonesia Bans Export of Unprocessed Nickel Ore" / "USA Awards $117M Grant for Synthetic Graphite Development"
+- Examples: "China Imposes Export Licensing Requirement on Graphite" / "Indonesia Bans Export of Unprocessed Nickel Ore" / "United States Awards $117M Grant for Synthetic Graphite Development"
 
 SUMMARY rules:
 - 2-3 sentences, 40-70 words total

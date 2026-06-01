@@ -265,7 +265,7 @@ function fmtIEADate(dateISO) {
 // ── IEA Policy data ──
 async function loadIEAData() {
   if (ieaData) return;
-  const cached = cacheGet("iea_policies_v4", 86400000);
+  const cached = cacheGet("iea_policies_v5", 86400000);
   if (cached) { ieaData = cached; return; }
 
   for (const src of ["/api/iea", "/data/iea_policies.json"]) {
@@ -279,7 +279,7 @@ async function loadIEAData() {
         countries: (p.countries || []).map(normalizeCountry),
         dateISO: p.dateISO || parseIEADate(p.datePromulgated, p.year),
       }));
-      cacheSet("iea_policies_v4", ieaData);
+      cacheSet("iea_policies_v5", ieaData);
       return;
     } catch (_) {}
   }
@@ -639,7 +639,7 @@ function typeClass(type) {
 // ── GTA data loader ──
 async function loadGTAData() {
   if (gtaData) return;
-  const cached = cacheGet("gta_interventions_v4", 86400000);
+  const cached = cacheGet("gta_interventions_v5", 86400000);
   if (cached) { gtaData = cached; return; }
 
   for (const src of ["/api/gta", "/data/gta-interventions.json"]) {
@@ -648,7 +648,7 @@ async function loadGTAData() {
       if (!r.ok) continue;
       const json = await r.json();
       gtaData = json.interventions || json;
-      cacheSet("gta_interventions_v4", gtaData);
+      cacheSet("gta_interventions_v5", gtaData);
       return;
     } catch (_) {}
   }

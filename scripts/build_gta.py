@@ -45,8 +45,7 @@ KEYWORDS = [
 ]
 
 COUNTRY_NORMALIZE = {
-    'United States of America': 'USA',
-    'United States': 'USA',
+    'United States of America': 'United States',
     'Republic of Korea': 'South Korea',
     "People's Republic of China": 'China',
     'Democratic Republic of the Congo': 'DR Congo',
