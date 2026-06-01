@@ -5,6 +5,8 @@ const COUNTRY_NORMALIZE = {
   "People's Republic of China": "China",
   "Democratic Republic of the Congo": "DR Congo",
   "United Republic of Tanzania": "Tanzania",
+  "United States of America": "USA",
+  "United States": "USA",
   "Korea": "South Korea",
 };
 

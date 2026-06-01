@@ -265,7 +265,7 @@ function fmtIEADate(dateISO) {
 // ── IEA Policy data ──
 async function loadIEAData() {
   if (ieaData) return;
-  const cached = cacheGet("iea_policies_v3", 86400000);
+  const cached = cacheGet("iea_policies_v4", 86400000);
   if (cached) { ieaData = cached; return; }
 
   for (const src of ["/api/iea", "/data/iea_policies.json"]) {
@@ -279,7 +279,7 @@ async function loadIEAData() {
         countries: (p.countries || []).map(normalizeCountry),
         dateISO: p.dateISO || parseIEADate(p.datePromulgated, p.year),
       }));
-      cacheSet("iea_policies_v3", ieaData);
+      cacheSet("iea_policies_v4", ieaData);
       return;
     } catch (_) {}
   }
@@ -426,6 +426,8 @@ async function renderIEAPolicies() {
   }
 
   for (const i of gtaFiltered) {
+    const gtaTitle = i.aiTitle || i.title;
+    const gtaSummary = i.aiSummary || "";
     cards.push({ dateISO: i.dateISO, html: `
       <div class="deal-card${isNew(i.dateISO) ? " is-new" : ""}">
         <div class="deal-meta">
@@ -434,8 +436,8 @@ async function renderIEAPolicies() {
           <span class="deal-type ${typeClass(i.dealType)}">${i.dealType}</span>
           ${i.minerals.map(m => `<span class="mineral-tag">${m}</span>`).join("")}
         </div>
-        <div class="project-name">${i.title}</div>
-        ${i.interventionType || i.implementers.length ? `<p class="deal-summary">${[i.interventionType, i.implementers.slice(0,3).join(", ")].filter(Boolean).join(" · ")}</p>` : ""}
+        <div class="project-name">${gtaTitle}</div>
+        ${gtaSummary ? `<p class="deal-summary">${gtaSummary}</p>` : ""}
         <div class="deal-footer">
           <a href="${i.link}" target="_blank" rel="noopener" class="deal-link">Source →</a>
         </div>
@@ -637,7 +639,7 @@ function typeClass(type) {
 // ── GTA data loader ──
 async function loadGTAData() {
   if (gtaData) return;
-  const cached = cacheGet("gta_interventions_v3", 86400000);
+  const cached = cacheGet("gta_interventions_v4", 86400000);
   if (cached) { gtaData = cached; return; }
 
   for (const src of ["/api/gta", "/data/gta-interventions.json"]) {
@@ -646,7 +648,7 @@ async function loadGTAData() {
       if (!r.ok) continue;
       const json = await r.json();
       gtaData = json.interventions || json;
-      cacheSet("gta_interventions_v3", gtaData);
+      cacheSet("gta_interventions_v4", gtaData);
       return;
     } catch (_) {}
   }
