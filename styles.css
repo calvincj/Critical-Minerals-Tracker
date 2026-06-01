@@ -122,6 +122,74 @@ aside {
   margin-bottom: 10px;
 }
 
+.filter-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  gap: 6px;
+}
+
+.filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.filter-toggle:hover {
+  color: var(--accent);
+}
+
+.chevron {
+  font-size: 11px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.filter-count {
+  font-size: 10px;
+  background: var(--accent-light);
+  color: var(--accent);
+  padding: 1px 5px;
+  border-radius: 10px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.section-actions {
+  display: flex;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.btn-section {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 10px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.btn-section:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.filter-group-body {
+  margin-top: 2px;
+}
+
 .filter-group label {
   display: flex;
   align-items: center;
@@ -297,6 +365,18 @@ main {
 .deal-type.type-non { background: #f0fdf4; color: #15803d; }
 .deal-type.type-harmful { background: #fef2f2; color: #b91c1c; }
 .deal-type.type-liberalising { background: #f0fdf4; color: #15803d; }
+.deal-type.type-subsidy { background: #eff6ff; color: #1d4ed8; }
+
+.status-pill {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px dashed #94a3b8;
+  color: #64748b;
+  background: transparent;
+}
 
 .deal-summary {
   font-size: 14px;

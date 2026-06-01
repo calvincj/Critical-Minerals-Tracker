@@ -32,8 +32,15 @@ let filters = {
   dealTypes: new Set(DEAL_TYPES),
   minerals: new Set(MINERALS),
   projectTypes: new Set(PROJECT_TYPES),
-  priceDirection: new Set(["up", "down"])
+  priceDirection: new Set(["up", "down"]),
+  countries: new Set(COUNTRIES),
 };
+const sectionOpen = { dealTypes: true, minerals: true, projectTypes: true, countries: false };
+
+function toggleSection(key) {
+  sectionOpen[key] = !sectionOpen[key];
+  renderSidebar();
+}
 let newsData = null;
 let tradeData = null;
 let gtaData = null;
@@ -55,30 +62,43 @@ function switchTab(tab) {
 function renderSidebar() {
   const aside = document.querySelector("aside");
 
-  const actionRow = `
-    <div class="filter-actions">
-      <button class="btn-action" onclick="selectAll()">Select all</button>
-      <button class="btn-action" onclick="clearFilters()">Clear all</button>
-    </div>`;
-
   if (activeTab === "deals") {
     aside.innerHTML =
-      actionRow +
       buildCheckboxGroup("Deal Type", "dealTypes", DEAL_TYPES) +
-      buildMineralFilter();
+      buildMineralFilter() +
+      buildCountryFilter();
   } else if (activeTab === "projects") {
     aside.innerHTML =
-      actionRow +
       buildCheckboxGroup("Project Type", "projectTypes", PROJECT_TYPES) +
       buildMineralFilter();
   } else if (activeTab === "prices") {
-    aside.innerHTML =
-      actionRow +
-      buildMineralFilter();
+    aside.innerHTML = buildMineralFilter();
   }
 }
 
+function buildSectionHeader(title, key) {
+  const open = sectionOpen[key] !== false;
+  const selected = filters[key] ? filters[key].size : null;
+  const total = key === "countries" ? COUNTRIES.length
+    : key === "dealTypes" ? DEAL_TYPES.length
+    : key === "minerals" ? MINERALS.length
+    : key === "projectTypes" ? PROJECT_TYPES.length : null;
+  const countLabel = (!open && selected !== null && selected < total)
+    ? ` <span class="filter-count">${selected}/${total}</span>` : "";
+  return `<div class="filter-header">
+    <h3 class="filter-toggle" onclick="toggleSection('${key}')">
+      ${title}${countLabel}
+      <span class="chevron">${open ? "▼" : "▶"}</span>
+    </h3>
+    ${open ? `<div class="section-actions">
+      <button class="btn-section" onclick="selectSection('${key}')">All</button>
+      <button class="btn-section" onclick="clearSection('${key}')">None</button>
+    </div>` : ""}
+  </div>`;
+}
+
 function buildCheckboxGroup(title, filterKey, options, labelFn = v => v) {
+  const open = sectionOpen[filterKey] !== false;
   const items = options.map(opt => {
     const checked = filters[filterKey].has(opt) ? "checked" : "";
     return `<label>
@@ -86,10 +106,14 @@ function buildCheckboxGroup(title, filterKey, options, labelFn = v => v) {
       ${labelFn(opt)}
     </label>`;
   }).join("");
-  return `<div class="filter-group"><h3>${title}</h3>${items}</div>`;
+  return `<div class="filter-group">
+    ${buildSectionHeader(title, filterKey)}
+    ${open ? `<div class="filter-group-body">${items}</div>` : ""}
+  </div>`;
 }
 
 function buildMineralFilter() {
+  const open = sectionOpen["minerals"] !== false;
   const groupButtons = MINERAL_GROUPS.map((g, i) => {
     const exactMatch = g.minerals.length === filters.minerals.size &&
       g.minerals.every(m => filters.minerals.has(m));
@@ -105,10 +129,44 @@ function buildMineralFilter() {
   }).join("");
 
   return `<div class="filter-group">
-    <h3>Mineral</h3>
-    <div class="group-btns">${groupButtons}</div>
-    <div class="mineral-checks">${checkboxes}</div>
+    ${buildSectionHeader("Mineral", "minerals")}
+    ${open ? `<div class="filter-group-body">
+      <div class="group-btns">${groupButtons}</div>
+      <div class="mineral-checks">${checkboxes}</div>
+    </div>` : ""}
   </div>`;
+}
+
+function buildCountryFilter() {
+  const open = sectionOpen["countries"] !== false;
+  const checkboxes = COUNTRIES.map(c => {
+    const checked = filters.countries.has(c) ? "checked" : "";
+    const safe = c.replace(/'/g, "\\'");
+    return `<label>
+      <input type="checkbox" ${checked} onchange="toggleFilter('countries', '${safe}', this.checked)">
+      ${c}
+    </label>`;
+  }).join("");
+
+  return `<div class="filter-group">
+    ${buildSectionHeader("Country", "countries")}
+    ${open ? `<div class="filter-group-body">${checkboxes}</div>` : ""}
+  </div>`;
+}
+
+function selectSection(key) {
+  if (key === "minerals") filters.minerals = new Set(MINERALS);
+  else if (key === "dealTypes") filters.dealTypes = new Set(DEAL_TYPES);
+  else if (key === "countries") filters.countries = new Set(COUNTRIES);
+  else if (key === "projectTypes") filters.projectTypes = new Set(PROJECT_TYPES);
+  renderSidebar();
+  renderContent();
+}
+
+function clearSection(key) {
+  filters[key] = new Set();
+  renderSidebar();
+  renderContent();
 }
 
 function selectMineralGroup(i) {
@@ -129,15 +187,7 @@ function selectAll() {
   filters.minerals = new Set(MINERALS);
   filters.projectTypes = new Set(PROJECT_TYPES);
   filters.priceDirection = new Set(["up", "down"]);
-  renderSidebar();
-  renderContent();
-}
-
-function clearFilters() {
-  filters.dealTypes = new Set();
-  filters.minerals = new Set();
-  filters.projectTypes = new Set();
-  filters.priceDirection = new Set();
+  filters.countries = new Set(COUNTRIES);
   renderSidebar();
   renderContent();
 }
@@ -186,20 +236,54 @@ function renderDeals() {
   `).join("");
 }
 
+// ── Country normalization ──
+function normalizeCountry(name) {
+  return COUNTRY_NORMALIZE[name] || name;
+}
+
+// ── IEA date parsing (handles YYYY-MM-DD, DD-MM-YYYY, and YYYY) ──
+function parseIEADate(datePromulgated, year) {
+  const dp = String(datePromulgated || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dp)) return dp;
+  if (/^\d{2}-\d{2}-\d{4}$/.test(dp)) {
+    const [d, m, y] = dp.split('-');
+    return `${y}-${m}-${d}`;
+  }
+  if (/^\d{4}$/.test(dp)) return `${dp}-01-01`;
+  return `${year || '2000'}-01-01`;
+}
+
+function fmtIEADate(dateISO) {
+  try {
+    const d = new Date(dateISO + 'T00:00:00Z');
+    // If year-only source, just show the year
+    if (dateISO.endsWith('-01-01')) return String(new Date(dateISO).getUTCFullYear());
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+  } catch (_) { return dateISO.slice(0, 4); }
+}
+
 // ── IEA Policy data ──
 async function loadIEAData() {
   if (ieaData) return;
-  const cached = cacheGet("iea_policies", 86400000);
+  const cached = cacheGet("iea_policies_v3", 86400000);
   if (cached) { ieaData = cached; return; }
-  try {
-    const r = await fetch("/data/iea_policies.json");
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    ieaData = await r.json();
-    cacheSet("iea_policies", ieaData);
-  } catch (err) {
-    console.error("[iea]", err.message);
-    ieaData = [];
+
+  for (const src of ["/api/iea", "/data/iea_policies.json"]) {
+    try {
+      const r = await fetch(src);
+      if (!r.ok) continue;
+      const json = await r.json();
+      const raw = Array.isArray(json) ? json : (json.policies || []);
+      ieaData = raw.map(p => ({
+        ...p,
+        countries: (p.countries || []).map(normalizeCountry),
+        dateISO: p.dateISO || parseIEADate(p.datePromulgated, p.year),
+      }));
+      cacheSet("iea_policies_v3", ieaData);
+      return;
+    } catch (_) {}
   }
+  ieaData = [];
 }
 
 const IEA_MINERAL_KEYWORDS = {
@@ -211,91 +295,155 @@ const IEA_MINERAL_KEYWORDS = {
   Nickel: ["nickel"],
   "Rare Earths": ["rare earth", "neodymium", "dysprosium", "praseodymium", "lanthanum", "cerium"],
   Silicon: ["silicon"],
-  Uranium: ["uranium"],
+  General: ["critical mineral", "supply chain", "strategic mineral"],
 };
 
-function extractMinerals(text) {
+function extractMinerals(text, aiMinerals) {
+  if (aiMinerals && aiMinerals.length > 0) return aiMinerals;
   const lower = text.toLowerCase();
-  return MINERALS.filter(m => IEA_MINERAL_KEYWORDS[m].some(kw => lower.includes(kw)));
+  const found = MINERALS.filter(m => IEA_MINERAL_KEYWORDS[m] && IEA_MINERAL_KEYWORDS[m].some(kw => lower.includes(kw)));
+  return found.length > 0 ? found : ["Others"];
+}
+
+function ieaPolicyDealType(policy) {
+  const names = policy.policyTypes.map(pt => pt.name);
+  // Trade Control: unilateral restrictions — export/import bans and controls
+  if (names.some(n => ["Export controls and restrictions", "Export and import ban",
+      "Import controls and restrictions"].includes(n))) {
+    return "Trade Control";
+  }
+  // Trade Deal: tariff and non-tariff trade policy measures
+  if (names.some(n => ["Tariffs and duties", "Non-tariff measures"].includes(n))) {
+    return "Trade Deal";
+  }
+  // Investment Agreement: FDI rules, financing, tax incentives, public investment
+  if (names.some(n => ["Foreign direct investment (FDI)", "Financing",
+      "Tax incentives", "Public investment"].includes(n))) {
+    return "Investment Agreement";
+  }
+  // Statement: strategic plans or standalone prescriptive/performance rules
+  if (names.some(n => ["Strategic plans", "Regulation", "Social standards",
+      "Transparency norms", "Due diligence obligations", "Permitting regimes",
+      "Minerals Recycling"].includes(n))) {
+    return "Statement";
+  }
+  // Non-Investment Agreement: bilateral/multilateral arrangements
+  return "Non-Investment Agreement";
 }
 
 function ieaPolicyLabel(policy) {
-  const names = policy.policyTypes.map(pt => pt.name);
-  if (names.some(n => ["Export controls and restrictions", "Export and import ban", "Import controls and restrictions"].includes(n))) return { label: "Trade Control", cls: "type-harmful" };
-  if (names.some(n => n === "Foreign direct investment (FDI)")) return { label: "Investment", cls: "type-trade" };
-  if (names.some(n => ["Non-tariff measures", "Tariffs and duties"].includes(n))) return { label: "Trade Measure", cls: "type-trade" };
-  if (names.some(n => n === "International arrangements")) return { label: "Agreement", cls: "type-statement" };
-  return { label: "Strategic Plan", cls: "type-non" };
+  const type = ieaPolicyDealType(policy);
+  const clsMap = {
+    "Trade Control": "type-harmful",
+    "Trade Deal": "type-trade",
+    "Investment Agreement": "type-mou",
+    "Non-Investment Agreement": "type-non",
+    "Statement": "type-statement",
+  };
+  return { label: type, cls: clsMap[type] };
 }
 
 async function renderIEAPolicies() {
   const container = document.getElementById("deals-list");
   if (!container) return;
 
-  if (!ieaData) {
-    container.innerHTML = `<div class="loading-row"><span class="spinner"></span> Loading IEA policies…</div>`;
-    await loadIEAData();
+  if (!ieaData || !gtaData) {
+    container.innerHTML = `<div class="loading-row"><span class="spinner"></span> Loading policies…</div>`;
+    await Promise.all([loadIEAData(), loadGTAData()]);
   }
 
-  const all = (ieaData || []);
-  const filtered = all.filter(p => {
-    const minerals = extractMinerals(p.title + " " + p.description);
-    return minerals.length === 0 || minerals.some(m => filters.minerals.has(m));
+  const allCountriesSelected = filters.countries.size === COUNTRIES.length;
+
+  // ── IEA ──
+  const ieaFiltered = (ieaData || []).filter(p => {
+    if (!filters.dealTypes.has(ieaPolicyDealType(p))) return false;
+    const minerals = extractMinerals(p.title + " " + p.description, p.aiMinerals);
+    if (!minerals.some(m => filters.minerals.has(m))) return false;
+    if (!allCountriesSelected && !p.countries.some(c => filters.countries.has(c))) return false;
+    return true;
   });
 
-  document.getElementById("deals-count").textContent = filtered.length;
+  // ── GTA ──
+  const gtaFiltered = (gtaData || []).filter(i => {
+    if (!filters.dealTypes.has(i.dealType)) return false;
+    if (!i.minerals.some(m => filters.minerals.has(m))) return false;
+    if (!allCountriesSelected && !i.implementers.some(c => filters.countries.has(c))) return false;
+    return true;
+  });
 
-  if (filtered.length === 0) {
+  // ── Static DEALS ──
+  const dealsFiltered = DEALS.filter(d =>
+    filters.dealTypes.has(d.type) && d.minerals.some(m => filters.minerals.has(m))
+  );
+
+  const total = ieaFiltered.length + gtaFiltered.length + dealsFiltered.length;
+  document.getElementById("deals-count").textContent = total;
+
+  if (total === 0) {
     container.innerHTML = `<div class="empty"><p>No policies match the selected filters.</p></div>`;
     return;
   }
 
-  const DEALS_filtered = DEALS.filter(d =>
-    filters.dealTypes.has(d.type) && d.minerals.some(m => filters.minerals.has(m))
-  ).sort((a, b) => b.dateISO.localeCompare(a.dateISO));
+  // Build a unified list of {dateISO, html} then sort newest-first
+  const cards = [];
 
-  const dealsHTML = DEALS_filtered.map(d => `
-    <div class="deal-card${isNew(d.dateISO) ? " is-new" : ""}">
-      <div class="deal-meta">
-        ${isNew(d.dateISO) ? newBadge() : ""}
-        <span class="deal-date">${d.date}</span>
-        <span class="deal-type ${typeClass(d.type)}">${d.type}</span>
-        ${d.minerals.map(m => `<span class="mineral-tag">${m}</span>`).join("")}
-      </div>
-      <div class="project-name">${d.name}</div>
-      <p class="deal-summary">${d.summary}</p>
-      <div class="deal-footer">
-        <a href="${d.link}" class="deal-link">Source →</a>
-      </div>
-    </div>
-  `).join("");
+  for (const d of dealsFiltered) {
+    cards.push({ dateISO: d.dateISO, html: `
+      <div class="deal-card${isNew(d.dateISO) ? " is-new" : ""}">
+        <div class="deal-meta">
+          ${isNew(d.dateISO) ? newBadge() : ""}
+          <span class="deal-date">${d.date}</span>
+          <span class="deal-type ${typeClass(d.type)}">${d.type}</span>
+          ${d.minerals.map(m => `<span class="mineral-tag">${m}</span>`).join("")}
+        </div>
+        <div class="project-name">${d.name}</div>
+        <p class="deal-summary">${d.summary}</p>
+        <div class="deal-footer">
+          <a href="${d.link}" class="deal-link">Source →</a>
+        </div>
+      </div>` });
+  }
 
-  const ieaHTML = filtered.map(p => {
+  for (const p of ieaFiltered) {
     const { label, cls } = ieaPolicyLabel(p);
-    const minerals = extractMinerals(p.title + " " + p.description).filter(m => filters.minerals.has(m));
-    const countries = p.countries.slice(0, 3).join(", ");
-    const dateStr = p.datePromulgated ? p.datePromulgated.substring(0, 4) : p.year;
-    const statusBadge = p.status === "Announced" ? `<span class="deal-type type-statement">Announced</span>` : "";
-    return `
+    const minerals = extractMinerals(p.title + " " + p.description, p.aiMinerals).filter(m => filters.minerals.has(m));
+    const dateStr = fmtIEADate(p.dateISO);
+    const title = p.aiTitle || p.title;
+    const summary = p.aiSummary || p.description || "";
+    cards.push({ dateISO: p.dateISO, html: `
       <div class="deal-card">
         <div class="deal-meta">
           <span class="deal-date">${dateStr}</span>
           <span class="deal-type ${cls}">${label}</span>
-          ${statusBadge}
           ${minerals.map(m => `<span class="mineral-tag">${m}</span>`).join("")}
-          <span class="source-badge">IEA</span>
         </div>
-        <div class="project-name">${p.title}</div>
-        ${p.description ? `<p class="deal-summary">${p.description}</p>` : ""}
+        <div class="project-name">${title}</div>
+        ${summary ? `<p class="deal-summary">${summary}</p>` : ""}
         <div class="deal-footer">
-          ${countries ? `<span style="color:var(--text-muted);font-size:12px">${countries}${p.jurisdiction === "International" ? " · International" : ""}</span>` : ""}
           ${p.link ? `<a href="${p.link}" target="_blank" rel="noopener" class="deal-link">Source →</a>` : ""}
         </div>
-      </div>`;
-  }).join("");
+      </div>` });
+  }
 
-  container.innerHTML = dealsHTML + ieaHTML;
-  document.getElementById("deals-count").textContent = DEALS_filtered.length + filtered.length;
+  for (const i of gtaFiltered) {
+    cards.push({ dateISO: i.dateISO, html: `
+      <div class="deal-card${isNew(i.dateISO) ? " is-new" : ""}">
+        <div class="deal-meta">
+          ${isNew(i.dateISO) ? newBadge() : ""}
+          ${i.date ? `<span class="deal-date">${i.date}</span>` : ""}
+          <span class="deal-type ${typeClass(i.dealType)}">${i.dealType}</span>
+          ${i.minerals.map(m => `<span class="mineral-tag">${m}</span>`).join("")}
+        </div>
+        <div class="project-name">${i.title}</div>
+        ${i.interventionType || i.implementers.length ? `<p class="deal-summary">${[i.interventionType, i.implementers.slice(0,3).join(", ")].filter(Boolean).join(" · ")}</p>` : ""}
+        <div class="deal-footer">
+          <a href="${i.link}" target="_blank" rel="noopener" class="deal-link">Source →</a>
+        </div>
+      </div>` });
+  }
+
+  cards.sort((a, b) => (b.dateISO || "").localeCompare(a.dateISO || ""));
+  container.innerHTML = cards.map(c => c.html).join("");
 }
 
 function renderProjects() {
@@ -478,71 +626,31 @@ async function renderSCMPNews(section, containerId, countId) {
 }
 
 function typeClass(type) {
+  if (type === "Trade Control") return "type-harmful";
   if (type === "Trade Deal") return "type-trade";
   if (type === "Statement") return "type-statement";
   if (type === "Non-Investment Agreement") return "type-non";
+  if (type === "Subsidy") return "type-subsidy";
   return "";
 }
 
-// ── GTA Policy Interventions ──
-async function renderGTA() {
-  const container = document.getElementById("gta-list");
-  if (!container) return;
+// ── GTA data loader ──
+async function loadGTAData() {
+  if (gtaData) return;
+  const cached = cacheGet("gta_interventions_v2", 86400000);
+  if (cached) { gtaData = cached; return; }
 
-  if (gtaData) { displayGTA(gtaData); return; }
-  const cached = cacheGet("gta_interventions", 21600000);
-  if (cached) { gtaData = cached; displayGTA(gtaData); return; }
-
-  container.innerHTML = `<div class="loading-row"><span class="spinner"></span> Loading policy interventions…</div>`;
-  try {
-    const r = await fetch("/api/gta");
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const json = await r.json();
-    gtaData = json.interventions || [];
-    cacheSet("gta_interventions", gtaData);
-    displayGTA(gtaData);
-  } catch (err) {
-    container.innerHTML = `<div class="empty"><p>Policy data unavailable (${err.message}).</p></div>`;
-    document.getElementById("gta-count").textContent = "0";
+  for (const src of ["/api/gta", "/data/gta-interventions.json"]) {
+    try {
+      const r = await fetch(src);
+      if (!r.ok) continue;
+      const json = await r.json();
+      gtaData = json.interventions || json;
+      cacheSet("gta_interventions_v2", gtaData);
+      return;
+    } catch (_) {}
   }
-}
-
-function displayGTA(interventions) {
-  const container = document.getElementById("gta-list");
-  const count = document.getElementById("gta-count");
-  if (!container) return;
-
-  const filtered = interventions.filter(i =>
-    i.minerals.some(m => filters.minerals.has(m))
-  );
-
-  if (count) count.textContent = filtered.length;
-  if (filtered.length === 0) {
-    container.innerHTML = `<div class="empty"><p>No policy interventions match the selected minerals.</p></div>`;
-    return;
-  }
-
-  container.innerHTML = filtered.map(i => {
-    const evalClass = i.evaluation === "harmful" ? "type-harmful"
-      : i.evaluation === "liberalising" ? "type-liberalising" : "type-statement";
-    const evalLabel = i.evaluation === "harmful" ? "Restrictive"
-      : i.evaluation === "liberalising" ? "Liberalising" : "Unclear";
-    return `
-      <div class="deal-card${isNew(i.dateISO) ? " is-new" : ""}">
-        <div class="deal-meta">
-          ${isNew(i.dateISO) ? newBadge() : ""}
-          ${i.date ? `<span class="deal-date">${i.date}</span>` : ""}
-          <span class="deal-type ${evalClass}">${evalLabel}</span>
-          ${i.minerals.map(m => `<span class="mineral-tag">${m}</span>`).join("")}
-          <span class="source-badge">GTA</span>
-        </div>
-        <div class="project-name">${i.title}</div>
-        ${i.interventionTypes ? `<p class="deal-summary" style="color:var(--text-muted);font-size:12px;margin-bottom:6px">${i.interventionTypes}${i.implementers.length ? ` · ${i.implementers.slice(0,3).join(", ")}` : ""}</p>` : ""}
-        <div class="deal-footer">
-          <a href="${i.link}" target="_blank" rel="noopener" class="deal-link">View intervention →</a>
-        </div>
-      </div>`;
-  }).join("");
+  gtaData = [];
 }
 
 // ── ITA Tariff Rates ──
@@ -647,6 +755,7 @@ function displayITAReports(reports) {
 async function prefetchInBackground() {
   await Promise.allSettled([
     loadIEAData(),
+    loadGTAData(),
     loadNewsData(),
   ]);
 }

@@ -8,7 +8,7 @@ const SCMP_FEEDS = [
   'https://www.scmp.com/rss/318199/feed', // Diplomacy & Defence
 ];
 
-const MINERALS = ['Cobalt','Copper','Graphite','Lithium','Manganese','Nickel','Rare Earths','Silicon','Uranium'];
+const MINERALS = ['Cobalt','Copper','Graphite','Lithium','Manganese','Nickel','Rare Earths','Silicon'];
 const DEAL_TYPES = ['Investment Agreement','Non-Investment Agreement','Trade Deal','Statement'];
 
 module.exports = async function handler(req, res) {
