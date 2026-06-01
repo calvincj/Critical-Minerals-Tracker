@@ -637,7 +637,7 @@ function typeClass(type) {
 // ── GTA data loader ──
 async function loadGTAData() {
   if (gtaData) return;
-  const cached = cacheGet("gta_interventions_v2", 86400000);
+  const cached = cacheGet("gta_interventions_v3", 86400000);
   if (cached) { gtaData = cached; return; }
 
   for (const src of ["/api/gta", "/data/gta-interventions.json"]) {
@@ -646,7 +646,7 @@ async function loadGTAData() {
       if (!r.ok) continue;
       const json = await r.json();
       gtaData = json.interventions || json;
-      cacheSet("gta_interventions_v2", gtaData);
+      cacheSet("gta_interventions_v3", gtaData);
       return;
     } catch (_) {}
   }
