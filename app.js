@@ -232,8 +232,6 @@ function renderContent() {
     renderProjects();
   } else if (activeTab === "prices") {
     renderFredPrices();
-    renderPrices();
-    renderITATariffs();
   }
 }
 
@@ -606,7 +604,7 @@ async function renderFredPrices() {
 
   if (fredData) { displayFredPrices(); return; }
 
-  const cached = cacheGet("fred_prices_v1", 86400000); // 24h
+  const cached = cacheGet("fred_prices_v2", 86400000); // 24h
   if (cached) { fredData = cached; displayFredPrices(); return; }
 
   container.innerHTML = `<div class="loading-row"><span class="spinner"></span> Loading historical prices…</div>`;
@@ -615,7 +613,7 @@ async function renderFredPrices() {
     const r = await fetch("/api/fred");
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     fredData = await r.json();
-    cacheSet("fred_prices_v1", fredData);
+    cacheSet("fred_prices_v2", fredData);
     displayFredPrices();
   } catch (err) {
     container.innerHTML = `<div class="empty"><p>Historical prices unavailable (${err.message})</p></div>`;

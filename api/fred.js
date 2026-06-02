@@ -1,14 +1,14 @@
 const SERIES = [
-  { id: 'GOLDAMGBD228NLBM', name: 'Gold',      unit: 'USD/troy oz',    resample: true  },
-  { id: 'SLVPRUSD',         name: 'Silver',    unit: 'USD/troy oz',    resample: false },
-  { id: 'PCOPPUSDM',        name: 'Copper',    unit: 'USD/metric ton', resample: false },
-  { id: 'PNICKUSDM',        name: 'Nickel',    unit: 'USD/metric ton', resample: false },
-  { id: 'PALUMUSDM',        name: 'Aluminum',  unit: 'USD/metric ton', resample: false },
-  { id: 'PLEADUSDM',        name: 'Lead',      unit: 'USD/metric ton', resample: false },
-  { id: 'PZINCUSDM',        name: 'Zinc',      unit: 'USD/metric ton', resample: false },
-  { id: 'PPLTMUSDM',        name: 'Platinum',  unit: 'USD/troy oz',    resample: false },
-  { id: 'PPALAUSDM',        name: 'Palladium', unit: 'USD/troy oz',    resample: false },
-  { id: 'PCOBAUSDM',        name: 'Cobalt',    unit: 'USD/metric ton', resample: false },
+  { id: 'PGOLDUSDM',   name: 'Gold',      unit: 'USD/troy oz'    },
+  { id: 'PSILVERUSDM', name: 'Silver',    unit: 'USD/troy oz'    },
+  { id: 'PCOPPUSDM',   name: 'Copper',    unit: 'USD/metric ton' },
+  { id: 'PNICKUSDM',   name: 'Nickel',    unit: 'USD/metric ton' },
+  { id: 'PALUMUSDM',   name: 'Aluminum',  unit: 'USD/metric ton' },
+  { id: 'PLEADUSDM',   name: 'Lead',      unit: 'USD/metric ton' },
+  { id: 'PZINCUSDM',   name: 'Zinc',      unit: 'USD/metric ton' },
+  { id: 'PPLATUSDM',   name: 'Platinum',  unit: 'USD/troy oz'    },
+  { id: 'PPALAUSDM',   name: 'Palladium', unit: 'USD/troy oz'    },
+  { id: 'PCOBAUSDM',   name: 'Cobalt',    unit: 'USD/metric ton' },
 ];
 
 module.exports = async function handler(req, res) {
@@ -34,9 +34,7 @@ module.exports = async function handler(req, res) {
         .map(o => ({ date: o.date, value: parseFloat(o.value) }));
 
       if (obs.length < 2) return null;
-
-      const data = s.resample ? toMonthly(obs) : obs;
-      return { name: s.name, unit: s.unit, data };
+      return { name: s.name, unit: s.unit, data: obs };
     } catch (_) {
       return null;
     }
@@ -44,11 +42,3 @@ module.exports = async function handler(req, res) {
 
   res.json({ series: results.filter(Boolean), fetchedAt: new Date().toISOString() });
 };
-
-function toMonthly(obs) {
-  const byMonth = {};
-  for (const o of obs) {
-    byMonth[o.date.slice(0, 7)] = o.value; // last value per month
-  }
-  return Object.entries(byMonth).map(([ym, value]) => ({ date: ym + '-01', value }));
-}
