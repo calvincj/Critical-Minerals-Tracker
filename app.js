@@ -44,6 +44,7 @@ function toggleSection(key) {
 let newsData = null;
 let tradeData = null;
 let gtaData = null;
+let gtaLiveData = null;
 let itaData = null;
 let ieaData = null;
 
@@ -349,9 +350,10 @@ async function renderIEAPolicies() {
 
   if (!ieaData || !gtaData) {
     container.innerHTML = `<div class="loading-row"><span class="spinner"></span> Loading policies…</div>`;
-    await Promise.all([loadIEAData(), loadGTAData()]);
+    await Promise.all([loadIEAData(), loadGTAData(), loadGTALiveData()]);
   }
 
+  const allGTA = mergeGTAData(gtaData || [], gtaLiveData || []);
   const allCountriesSelected = filters.countries.size === COUNTRIES.length;
 
   // ── IEA ──
@@ -363,8 +365,8 @@ async function renderIEAPolicies() {
     return true;
   });
 
-  // ── GTA ──
-  const gtaFiltered = (gtaData || []).filter(i => {
+  // ── GTA (static + live merged) ──
+  const gtaFiltered = allGTA.filter(i => {
     if (!filters.dealTypes.has(i.dealType)) return false;
     if (!i.minerals.some(m => filters.minerals.has(m))) return false;
     if (!allCountriesSelected && !i.implementers.some(c => filters.countries.has(c))) return false;
@@ -636,7 +638,7 @@ function typeClass(type) {
   return "";
 }
 
-// ── GTA data loader ──
+// ── GTA data loaders ──
 async function loadGTAData() {
   if (gtaData) return;
   const cached = cacheGet("gta_interventions_v5", 86400000);
@@ -653,6 +655,33 @@ async function loadGTAData() {
     } catch (_) {}
   }
   gtaData = [];
+}
+
+async function loadGTALiveData() {
+  if (gtaLiveData) return;
+  // Live data cached 1h in localStorage
+  const cached = cacheGet("gta_live_v1", 3600000);
+  if (cached) { gtaLiveData = cached; return; }
+  try {
+    const r = await fetch("/api/gta-live");
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const json = await r.json();
+    gtaLiveData = json.interventions || [];
+    cacheSet("gta_live_v1", gtaLiveData);
+  } catch (_) {
+    gtaLiveData = [];
+  }
+}
+
+// Merge static + live GTA, deduplicate by id, live wins on conflict
+function mergeGTAData(staticData, liveData) {
+  const seen = new Set();
+  const merged = [];
+  for (const i of [...liveData, ...staticData]) {
+    const key = String(i.id || i.title);
+    if (!seen.has(key)) { seen.add(key); merged.push(i); }
+  }
+  return merged;
 }
 
 // ── ITA Tariff Rates ──
@@ -758,6 +787,7 @@ async function prefetchInBackground() {
   await Promise.allSettled([
     loadIEAData(),
     loadGTAData(),
+    loadGTALiveData(),
     loadNewsData(),
   ]);
 }
