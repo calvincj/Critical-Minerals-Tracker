@@ -1,70 +1,38 @@
-// Series that are already monthly use frequency=m safely.
-// Gold (daily) is fetched without frequency param then resampled.
-// Each failing series gets an alt ID to try.
-const SERIES = [
-  { id: 'GOLDAMGBD228NLBM', name: 'Gold',      unit: 'USD/troy oz',    noFreq: true  },
-  { id: 'SLVPRUSD',         name: 'Silver',    unit: 'USD/troy oz',    noFreq: true  },
-  { id: 'PCOPPUSDM',        name: 'Copper',    unit: 'USD/metric ton'                },
-  { id: 'PNICKUSDM',        name: 'Nickel',    unit: 'USD/metric ton'                },
-  { id: 'PALUMUSDM',        name: 'Aluminum',  unit: 'USD/metric ton'                },
-  { id: 'PLEADUSDM',        name: 'Lead',      unit: 'USD/metric ton'                },
-  { id: 'PZINCUSDM',        name: 'Zinc',      unit: 'USD/metric ton'                },
-  { id: 'PPLTMUSDM',        name: 'Platinum',  unit: 'USD/troy oz'                   },
-  { id: 'PPALLADUSDM',      name: 'Palladium', unit: 'USD/troy oz'                   },
-  { id: 'PCOBALUSDM',       name: 'Cobalt',    unit: 'USD/metric ton'                },
+// Test multiple candidate IDs per metal to find what FRED actually accepts
+const CANDIDATES = [
+  { name: 'Gold',      unit: 'USD/troy oz',    ids: ['GOLDPMGBD228NLBM','GOLDAMGBD228NLBM','XAUUSD','PGOLDUSDM'], noFreq: true },
+  { name: 'Silver',    unit: 'USD/troy oz',    ids: ['SLVPRUSD','XAGUSD','PSILVUSDM','PSILVERUSDM'],             noFreq: true },
+  { name: 'Platinum',  unit: 'USD/troy oz',    ids: ['PPLTMUSDM','PPLATUSDM','XPTUSX','XPTUSM']                              },
+  { name: 'Palladium', unit: 'USD/troy oz',    ids: ['PPALAUSDM','XPDUSM','PPALLADUSDM','PPALADUSDM']                        },
+  { name: 'Cobalt',    unit: 'USD/metric ton', ids: ['PCOBAUSDM','PCOBALUSDM','COBALT']                                      },
 ];
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 module.exports = async function handler(req, res) {
-  res.setHeader('Cache-Control', 'no-store'); // keep off until IDs confirmed
+  res.setHeader('Cache-Control', 'no-store');
 
   const apiKey = process.env.FRED_API_KEY;
-  if (!apiKey) return res.status(500).json({ series: [], error: 'FRED_API_KEY not configured' });
-
-  const start = new Date();
-  start.setFullYear(start.getFullYear() - 10);
-  const startStr = start.toISOString().slice(0, 10);
+  if (!apiKey) return res.status(500).json({ results: [], error: 'FRED_API_KEY not configured' });
 
   const results = [];
-  const debug = [];
-
-  for (let i = 0; i < SERIES.length; i++) {
-    if (i > 0) await sleep(500);
-    const s = SERIES[i];
-    try {
-      const freqParam = s.noFreq ? '' : '&frequency=m';
-      const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${s.id}&api_key=${apiKey}&file_type=json&sort_order=asc&observation_start=${startStr}${freqParam}`;
-      const r = await fetch(url, { signal: AbortSignal.timeout(12000) });
-      if (!r.ok) {
-        debug.push({ id: s.id, status: r.status });
-        results.push(null);
-        continue;
+  let i = 0;
+  for (const c of CANDIDATES) {
+    for (const id of c.ids) {
+      if (i++ > 0) await sleep(400);
+      const freqParam = c.noFreq ? '' : '&frequency=m';
+      const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${id}&api_key=${apiKey}&file_type=json&sort_order=asc&observation_start=2020-01-01${freqParam}`;
+      try {
+        const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+        const body = await r.text();
+        const ok = r.status === 200 && !body.includes('"error_message"');
+        results.push({ metal: c.name, id, status: r.status, ok });
+        if (ok) break; // found a working ID for this metal, skip rest
+      } catch (e) {
+        results.push({ metal: c.name, id, status: 'timeout', ok: false });
       }
-      const json = await r.json();
-      if (json.error_message) {
-        debug.push({ id: s.id, error: json.error_message });
-        results.push(null);
-        continue;
-      }
-      let obs = (json.observations || [])
-        .filter(o => o.value !== '.')
-        .map(o => ({ date: o.date, value: parseFloat(o.value) }));
-
-      if (s.noFreq) obs = toMonthly(obs);
-      debug.push({ id: s.id, ok: true, count: obs.length });
-      results.push(obs.length >= 2 ? { name: s.name, unit: s.unit, data: obs } : null);
-    } catch (e) {
-      debug.push({ id: s.id, error: e.message });
-      results.push(null);
     }
   }
 
-  res.json({ series: results.filter(Boolean), debug, fetchedAt: new Date().toISOString() });
+  res.json({ results });
 };
-
-function toMonthly(obs) {
-  const byMonth = {};
-  for (const o of obs) byMonth[o.date.slice(0, 7)] = o.value;
-  return Object.entries(byMonth).map(([ym, value]) => ({ date: ym + '-01', value }));
-}
