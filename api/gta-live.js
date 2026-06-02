@@ -1,4 +1,3 @@
-const Groq = require('groq-sdk');
 const WTO_HS = require('../data/wto_hs_codes.json');
 
 // ── Lookups ────────────────────────────────────────────────────────────────
@@ -69,41 +68,28 @@ function mapItem(item) {
     date,
     dateISO,
     link: item.source_url || `https://www.globaltradealert.org/intervention/${item.intervention_id}`,
-    aiTitle: null,
-    aiSummary: null,
+    description: null,
   };
 }
 
-// ── Groq enrichment ────────────────────────────────────────────────────────
-async function enrichWithGroq(groq, records) {
-  if (!records.length) return;
-  const lines = records.map((r, i) =>
-    `[${i}] ${r.implementers.slice(0,3).join(', ')||'Unknown'} | ${r.minerals.join(', ')} | ${r.interventionType} | ${r.title}`
-  ).join('\n');
+// ── Scrape description from GTA intervention page ──────────────────────────
+async function fetchDescription(url) {
+  try {
+    const r = await fetch(url, {
+      headers: { 'User-Agent': 'CriticalMineralsTracker/1.0 (research)' },
+      signal: AbortSignal.timeout(8000),
+    });
+    const html = await r.text();
+    const m = html.match(/<meta[^>]+name="description"[^>]+content="([^"]+)"/);
+    if (m) return m[1].replace(/&#x27;/g, "'").replace(/&amp;/g, '&').replace(/&quot;/g, '"').trim();
+  } catch (_) {}
+  return null;
+}
 
-  const resp = await groq.chat.completions.create({
-    model: 'llama-3.1-8b-instant',
-    messages: [{ role: 'user', content: `You are a critical minerals policy analyst. For each entry generate a clear title and summary.
-
-TITLE: 8-12 words, must include (1) country, (2) action verb, (3) mineral. Format: "[Country] [verb] [action] on [mineral]"
-SUMMARY: 2-3 sentences, 40-70 words. Cover: what country did, which mineral, what mechanism, key details. No "This policy" opener.
-
-Entries (index | implementers | minerals | type | original title):
-${lines}
-
-Return ONLY JSON: {"items":[{"i":<n>,"title":"...","summary":"..."}]}` }],
-    response_format: { type: 'json_object' },
-    max_tokens: 2000,
-    temperature: 0.1,
-  });
-
-  const parsed = JSON.parse(resp.choices[0].message.content);
-  for (const { i, title, summary } of (parsed.items || [])) {
-    if (i >= 0 && i < records.length) {
-      records[i].aiTitle = title || null;
-      records[i].aiSummary = summary || null;
-    }
-  }
+async function scrapeDescriptions(records) {
+  await Promise.all(records.map(async r => {
+    r.description = await fetchDescription(r.link);
+  }));
 }
 
 // ── Handler ────────────────────────────────────────────────────────────────
@@ -144,13 +130,10 @@ module.exports = async function handler(req, res) {
     const { data = [] } = await gtar.json();
     const interventions = data.map(mapItem).filter(Boolean);
 
-    // Groq-enrich all live records (small batch, fast)
-    if (process.env.GROQ_API_KEY && interventions.length) {
-      const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-      // Process in chunks of 25 to stay safe
-      for (let i = 0; i < interventions.length; i += 25) {
-        try { await enrichWithGroq(groq, interventions.slice(i, i + 25)); } catch (_) {}
-      }
+    // Scrape descriptions in parallel (capped at 20 concurrent to be polite)
+    const CONCURRENCY = 20;
+    for (let i = 0; i < interventions.length; i += CONCURRENCY) {
+      await scrapeDescriptions(interventions.slice(i, i + CONCURRENCY));
     }
 
     res.json({ interventions, count: interventions.length, from, fetchedAt: new Date().toISOString() });

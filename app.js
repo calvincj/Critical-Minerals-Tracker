@@ -428,8 +428,7 @@ async function renderIEAPolicies() {
   }
 
   for (const i of gtaFiltered) {
-    const gtaTitle = i.aiTitle || i.title;
-    const gtaSummary = i.aiSummary || "";
+    const gtaSummary = i.description || "";
     cards.push({ dateISO: i.dateISO, html: `
       <div class="deal-card${isNew(i.dateISO) ? " is-new" : ""}">
         <div class="deal-meta">
@@ -438,7 +437,7 @@ async function renderIEAPolicies() {
           <span class="deal-type ${typeClass(i.dealType)}">${i.dealType}</span>
           ${i.minerals.map(m => `<span class="mineral-tag">${m}</span>`).join("")}
         </div>
-        <div class="project-name">${gtaTitle}</div>
+        <div class="project-name">${i.title}</div>
         ${gtaSummary ? `<p class="deal-summary">${gtaSummary}</p>` : ""}
         <div class="deal-footer">
           <a href="${i.link}" target="_blank" rel="noopener" class="deal-link">Source →</a>
