@@ -57,7 +57,6 @@ function toggleSection(key) {
   sectionOpen[key] = !sectionOpen[key];
   renderSidebar();
 }
-let livePricesData = null;
 let newsData = null;
 let tradeData = null;
 let gtaData = null;
@@ -229,7 +228,6 @@ function renderContent() {
     renderFacilitiesMap();
     renderProjects();
   } else if (activeTab === "prices") {
-    renderLivePrices();
     renderPrices();
     renderITATariffs();
   }
@@ -596,80 +594,6 @@ function renderProjects() {
   `).join("");
 }
 
-// ── Live Spot Prices ──
-async function renderLivePrices() {
-  const container = document.getElementById("live-prices-container");
-  const updatedEl = document.getElementById("live-prices-updated");
-  const dot = document.getElementById("live-prices-dot");
-
-  if (livePricesData) {
-    displayLivePrices(livePricesData, updatedEl, dot);
-    return;
-  }
-
-  const cached = cacheGet("mineral_prices_v1", 300000); // 5 min
-  if (cached) {
-    livePricesData = cached;
-    displayLivePrices(livePricesData, updatedEl, dot);
-    return;
-  }
-
-  container.innerHTML = `<div class="loading-row"><span class="spinner"></span> Loading live prices…</div>`;
-
-  try {
-    const r = await fetch("/api/mineral-prices");
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const json = await r.json();
-    if (!json.prices || json.prices.length === 0) throw new Error(json.error || "No data");
-    livePricesData = json;
-    cacheSet("mineral_prices_v1", json);
-    displayLivePrices(livePricesData, updatedEl, dot);
-  } catch (err) {
-    container.innerHTML = `<div class="empty"><p>Live prices unavailable (${err.message}). <a href="https://mineralprices.com/" target="_blank" rel="noopener noreferrer">View on mineralprices.com →</a></p></div>`;
-    if (dot) dot.className = "live-dot error";
-  }
-}
-
-function displayLivePrices(data, updatedEl, dot) {
-  const container = document.getElementById("live-prices-container");
-
-  if (updatedEl && data.fetchedAt) {
-    const t = new Date(data.fetchedAt);
-    updatedEl.textContent = `Updated ${t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} UTC`;
-  }
-  if (dot) dot.className = "live-dot active";
-
-  container.innerHTML = `
-    <div class="live-prices-wrap">
-      <table class="live-prices-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th class="num">Price</th>
-            <th class="num">Change</th>
-            <th class="num">Chg%</th>
-            <th class="num hide-sm">Open</th>
-            <th class="num hide-sm">High</th>
-            <th class="num hide-sm">Low</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${data.prices.map(p => `
-            <tr class="lp-row lp-${p.dir}">
-              <td class="lp-name">${p.name}</td>
-              <td class="num lp-value">${p.value}</td>
-              <td class="num lp-change ${p.dir}">${p.dir === "up" ? "+" : ""}${p.change}</td>
-              <td class="num lp-pct ${p.dir}">${p.dir === "up" ? "+" : ""}${p.changePct}</td>
-              <td class="num hide-sm lp-dim">${p.open}</td>
-              <td class="num hide-sm lp-dim">${p.high}</td>
-              <td class="num hide-sm lp-dim">${p.low}</td>
-            </tr>
-          `).join("")}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
 
 function renderPrices() {
   const filtered = PRICES.filter(p =>
