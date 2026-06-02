@@ -21,9 +21,11 @@ function newBadge() {
   return `<span class="new-badge">NEW</span>`;
 }
 function truncateDesc(text, max = 400) {
-  if (!text || text.length <= max) return text;
-  const cut = text.lastIndexOf(' ', max);
-  return text.slice(0, cut > 0 ? cut : max) + '…';
+  if (!text) return text;
+  const clean = text.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (clean.length <= max) return clean;
+  const cut = clean.lastIndexOf(' ', max);
+  return clean.slice(0, cut > 0 ? cut : max) + '…';
 }
 
 function normTitle(t) {
