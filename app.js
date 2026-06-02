@@ -20,10 +20,14 @@ function isNew(dateISO) {
 function newBadge() {
   return `<span class="new-badge">NEW</span>`;
 }
-function truncateDesc(text, max = 380) {
+function truncateDesc(text, max = 400) {
   if (!text || text.length <= max) return text;
   const cut = text.lastIndexOf(' ', max);
   return text.slice(0, cut > 0 ? cut : max) + '…';
+}
+
+function normTitle(t) {
+  return (t || '').replace(/United States of America/g, 'USA');
 }
 
 function fmtUSD(n) {
@@ -235,7 +239,7 @@ function renderDeals() {
         <span class="deal-type ${typeClass(d.type)}">${d.type}</span>
         ${d.minerals.map(m => `<span class="mineral-tag">${m}</span>`).join("")}
       </div>
-      <div class="project-name">${d.name}</div>
+      <div class="project-name">${normTitle(d.name)}</div>
       <p class="deal-summary">${d.summary}</p>
       <div class="deal-footer">
         <a href="${d.link}" class="deal-link">Source →</a>
@@ -407,7 +411,7 @@ async function renderIEAPolicies() {
           <span class="deal-type ${typeClass(d.type)}">${d.type}</span>
           ${d.minerals.map(m => `<span class="mineral-tag">${m}</span>`).join("")}
         </div>
-        <div class="project-name">${d.name}</div>
+        <div class="project-name">${normTitle(d.name)}</div>
         <p class="deal-summary">${d.summary}</p>
         <div class="deal-footer">
           <a href="${d.link}" class="deal-link">Source →</a>
@@ -428,7 +432,7 @@ async function renderIEAPolicies() {
           <span class="deal-type ${cls}">${label}</span>
           ${minerals.map(m => `<span class="mineral-tag">${m}</span>`).join("")}
         </div>
-        <div class="project-name">${title}</div>
+        <div class="project-name">${normTitle(title)}</div>
         ${summary ? `<p class="deal-summary">${summary}</p>` : ""}
         <div class="deal-footer">
           ${p.link ? `<a href="${p.link}" target="_blank" rel="noopener" class="deal-link">Source →</a>` : ""}
@@ -446,7 +450,7 @@ async function renderIEAPolicies() {
           <span class="deal-type ${typeClass(i.dealType)}">${i.dealType}</span>
           ${i.minerals.map(m => `<span class="mineral-tag">${m}</span>`).join("")}
         </div>
-        <div class="project-name">${i.title}</div>
+        <div class="project-name">${normTitle(i.title)}</div>
         ${gtaSummary ? `<p class="deal-summary">${gtaSummary}</p>` : ""}
         <div class="deal-footer">
           <a href="${i.link}" target="_blank" rel="noopener" class="deal-link">Source →</a>
@@ -480,7 +484,7 @@ function renderProjects() {
         <span class="project-type type-${p.type.toLowerCase()}">${p.type}</span>
         <span class="mineral-tag">${p.mineral}</span>
       </div>
-      <div class="project-name">${p.name}</div>
+      <div class="project-name">${normTitle(p.name)}</div>
       <p class="deal-summary">${p.summary}</p>
       <a href="${p.link}" class="deal-link">Source →</a>
     </div>
@@ -628,7 +632,7 @@ async function renderSCMPNews(section, containerId, countId) {
           ${a.minerals.map(m => `<span class="mineral-tag">${m}</span>`).join("")}
           <span class="source-badge">SCMP</span>
         </div>
-        <div class="project-name">${a.title}</div>
+        <div class="project-name">${normTitle(a.title)}</div>
         <p class="deal-summary">${truncateDesc(a.summary)}</p>
         <div class="deal-footer">
           <a href="${a.link}" target="_blank" rel="noopener" class="deal-link">Read article →</a>
@@ -811,7 +815,7 @@ function displayITAReports(reports) {
           ${r.country ? `<span class="mineral-tag">${r.country}</span>` : ""}
           <span class="source-badge" style="background:#e0f2fe;color:#0369a1">ITA</span>
         </div>
-        <div class="project-name">${r.title}</div>
+        <div class="project-name">${normTitle(r.title)}</div>
         ${r.summary ? `<p class="deal-summary">${r.summary}</p>` : ""}
         <div class="deal-footer">
           <a href="${r.link}" target="_blank" rel="noopener" class="deal-link">Read report →</a>
