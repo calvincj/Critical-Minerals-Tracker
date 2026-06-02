@@ -43,7 +43,7 @@ function fmtUSD(n) {
 }
 
 // ── State ──
-const FRED_MINERALS = ["Silver","Copper","Nickel","Aluminum","Lead","Zinc","Palladium"];
+const FRED_MINERALS = ["Gold","Silver","Platinum","Palladium","Copper","Nickel","Aluminum","Lead","Zinc"];
 
 let activeTab = "deals";
 let filters = {
@@ -609,7 +609,7 @@ async function renderFredPrices() {
 
   if (fredData) { displayFredPrices(); return; }
 
-  const cached = cacheGet("fred_prices_v4", 86400000); // 24h
+  const cached = cacheGet("fred_prices_v5", 86400000); // 24h
   if (cached) { fredData = cached; displayFredPrices(); return; }
 
   container.innerHTML = `<div class="loading-row"><span class="spinner"></span> Loading historical prices…</div>`;
@@ -618,7 +618,7 @@ async function renderFredPrices() {
     const r = await fetch("/api/fred");
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     fredData = await r.json();
-    cacheSet("fred_prices_v4", fredData);
+    cacheSet("fred_prices_v5", fredData);
     displayFredPrices();
   } catch (err) {
     container.innerHTML = `<div class="empty"><p>Historical prices unavailable (${err.message})</p></div>`;
