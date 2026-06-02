@@ -45,6 +45,7 @@ let newsData = null;
 let tradeData = null;
 let gtaData = null;
 let gtaLiveData = null;
+let gtaDescriptions = null;
 let itaData = null;
 let ieaData = null;
 
@@ -350,7 +351,7 @@ async function renderIEAPolicies() {
 
   if (!ieaData || !gtaData) {
     container.innerHTML = `<div class="loading-row"><span class="spinner"></span> Loading policies…</div>`;
-    await Promise.all([loadIEAData(), loadGTAData(), loadGTALiveData()]);
+    await Promise.all([loadIEAData(), loadGTAData(), loadGTALiveData(), loadGTADescriptions()]);
   }
 
   const allGTA = mergeGTAData(gtaData || [], gtaLiveData || []);
@@ -428,7 +429,7 @@ async function renderIEAPolicies() {
   }
 
   for (const i of gtaFiltered) {
-    const gtaSummary = i.description || "";
+    const gtaSummary = (gtaDescriptions && gtaDescriptions[i.id]) || i.description || "";
     cards.push({ dateISO: i.dateISO, html: `
       <div class="deal-card${isNew(i.dateISO) ? " is-new" : ""}">
         <div class="deal-meta">
@@ -672,6 +673,21 @@ async function loadGTALiveData() {
   }
 }
 
+async function loadGTADescriptions() {
+  if (gtaDescriptions) return;
+  const cached = cacheGet("gta_descriptions_v1", 86400000);
+  if (cached) { gtaDescriptions = cached; return; }
+  try {
+    const r = await fetch("/api/gta-scrape");
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const json = await r.json();
+    gtaDescriptions = json.descriptions || {};
+    cacheSet("gta_descriptions_v1", gtaDescriptions);
+  } catch (_) {
+    gtaDescriptions = {};
+  }
+}
+
 // Merge static + live GTA, deduplicate by id, live wins on conflict
 function mergeGTAData(staticData, liveData) {
   const seen = new Set();
@@ -787,6 +803,7 @@ async function prefetchInBackground() {
     loadIEAData(),
     loadGTAData(),
     loadGTALiveData(),
+    loadGTADescriptions(),
     loadNewsData(),
   ]);
 }

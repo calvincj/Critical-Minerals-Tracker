@@ -15,12 +15,50 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 csv.field_size_limit(sys.maxsize)
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+GTA_USERNAME = os.environ.get('GTA_USERNAME', '')
+GTA_PASSWORD = os.environ.get('GTA_PASSWORD', '')
+
+# ── Auth ───────────────────────────────────────────────────────────────────
+def get_gta_token():
+    if not GTA_USERNAME or not GTA_PASSWORD:
+        return None
+    try:
+        req = urllib.request.Request(
+            'https://api.globaltradealert.org/v1/auth/token/',
+            data=json.dumps({'username': GTA_USERNAME, 'password': GTA_PASSWORD, 'application': 'GTA_WEBSITE'}).encode(),
+            headers={'Content-Type': 'application/json', 'Origin': 'https://globaltradealert.org', 'Referer': 'https://globaltradealert.org/'},
+            method='POST'
+        )
+        resp = urllib.request.urlopen(req, timeout=10)
+        data = json.loads(resp.read())
+        token = data.get('access') or data.get('token')
+        if token:
+            print(f"✓ Logged in as {GTA_USERNAME}")
+        return token
+    except Exception as e:
+        print(f"⚠  Login failed: {e}")
+        return None
+
 # ── Scraper ────────────────────────────────────────────────────────────────
-def fetch_description(intervention_id, link):
+def fetch_description(intervention_id, link, cookie_header=None):
     try:
         url = link or f'https://globaltradealert.org/intervention/{intervention_id}'
-        req = urllib.request.Request(url, headers={'User-Agent': 'CriticalMineralsTracker/1.0 (research)'})
+        headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'}
+        if cookie_header:
+            headers['Cookie'] = cookie_header
+        req = urllib.request.Request(url, headers=headers)
         html = urllib.request.urlopen(req, timeout=10).read().decode('utf-8', errors='ignore')
+
+        # Authenticated: full description in text-[14px] paragraph
+        if cookie_header:
+            m = re.search(r'class="text-\[14px\][^"]*"[^>]*>([\s\S]*?)</p>', html)
+            if m:
+                import html as html_module
+                text = html_module.unescape(re.sub(r'<[^>]+>', '', m.group(1))).strip()
+                if len(text) > 50 and 'Sign in' not in text:
+                    return text
+
+        # Fallback: meta description (truncated)
         m = re.search(r'<meta[^>]+name="description"[^>]+content="([^"]+)"', html)
         if m:
             import html as html_module
@@ -118,11 +156,21 @@ for fname, source_type in [('gta-subsidies.csv', 'subsidy'), ('gta-traderestrict
 interventions.sort(key=lambda x: x['dateISO'], reverse=True)
 
 # ── Scrape descriptions ────────────────────────────────────────────────────
-print(f"Scraping descriptions for {len(interventions)} interventions (10 parallel)...")
+token = get_gta_token()
+cookie_header = None
+if token:
+    import urllib.parse
+    cookie_header = f"auth._token.local={urllib.parse.quote(f'Bearer {token}')}"
+    print("Using authenticated scraping (full descriptions)")
+else:
+    print("Using unauthenticated scraping (truncated ~200 char descriptions)")
+    print("  → Set GTA_USERNAME and GTA_PASSWORD env vars for full descriptions")
+
+print(f"Scraping {len(interventions)} interventions (20 parallel)...")
 scraped, failed = 0, 0
 
-with ThreadPoolExecutor(max_workers=10) as pool:
-    futures = {pool.submit(fetch_description, i['id'], i['link']): idx for idx, i in enumerate(interventions)}
+with ThreadPoolExecutor(max_workers=20) as pool:
+    futures = {pool.submit(fetch_description, i['id'], i['link'], cookie_header): idx for idx, i in enumerate(interventions)}
     for future in as_completed(futures):
         idx = futures[future]
         desc = future.result()
