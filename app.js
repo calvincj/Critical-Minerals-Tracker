@@ -60,6 +60,9 @@ function toggleSection(key) {
 let newsData = null;
 let tradeData = null;
 let gtaData = null;
+let facilitiesData = null;
+let facilityMap = null;
+let facilityCluster = null;
 let gtaLiveData = null;
 let gtaDescriptions = null;
 let itaData = null;
@@ -215,6 +218,7 @@ function renderContent() {
   if (activeTab === "deals") {
     renderIEAPolicies();
   } else if (activeTab === "projects") {
+    renderFacilitiesMap();
     renderProjects();
   } else if (activeTab === "prices") {
     renderPrices();
@@ -466,6 +470,87 @@ async function renderIEAPolicies() {
 
   cards.sort((a, b) => (b.dateISO || "").localeCompare(a.dateISO || ""));
   container.innerHTML = cards.map(c => c.html).join("");
+}
+
+// ── ICMM Facilities Map ──────────────────────────────────────────────────
+const FACILITY_COLORS = {
+  Mine:     '#d97706',
+  Smelter:  '#2563eb',
+  Refinery: '#7c3aed',
+  Other:    '#6b7280',
+};
+
+async function loadFacilitiesData() {
+  if (facilitiesData) return;
+  try {
+    const r = await fetch('/data/icmm_facilities.json');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    facilitiesData = await r.json();
+  } catch (err) {
+    console.error('[facilities]', err.message);
+    facilitiesData = [];
+  }
+}
+
+async function renderFacilitiesMap() {
+  await loadFacilitiesData();
+  const mapEl = document.getElementById('facilities-map');
+  if (!mapEl) return;
+
+  // Init map once
+  if (!facilityMap) {
+    facilityMap = L.map('facilities-map', { preferCanvas: true }).setView([20, 0], 2);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '© OpenStreetMap © CARTO',
+      maxZoom: 18,
+    }).addTo(facilityMap);
+    facilityCluster = L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 40 });
+    facilityMap.addLayer(facilityCluster);
+  }
+
+  // Render legend
+  const legendEl = document.getElementById('map-legend');
+  if (legendEl) {
+    legendEl.innerHTML = Object.entries(FACILITY_COLORS).map(([type, color]) =>
+      `<div class="map-legend-item">
+        <div class="map-legend-dot" style="background:${color}"></div>
+        <span>${type}</span>
+      </div>`
+    ).join('') + `<span style="margin-left:auto;color:var(--text-muted);font-size:11px">${(facilitiesData||[]).length.toLocaleString()} facilities · ICMM</span>`;
+  }
+
+  facilityCluster.clearLayers();
+
+  const activeMineral = filters.minerals;
+  const activeType = filters.projectTypes;
+
+  const filtered = (facilitiesData || []).filter(f => {
+    if (!activeMineral.has(f.mineral)) return false;
+    if (!activeType.has(f.type) && activeType.size < PROJECT_TYPES.length) return false;
+    return true;
+  });
+
+  const markers = filtered.map(f => {
+    const color = FACILITY_COLORS[f.type] || FACILITY_COLORS.Other;
+    const marker = L.circleMarker([f.lat, f.lon], {
+      radius: 5,
+      fillColor: color,
+      color: '#fff',
+      weight: 1,
+      opacity: 0.9,
+      fillOpacity: 0.8,
+    });
+    marker.bindPopup(`
+      <strong>${f.name}</strong><br>
+      ${f.group ? `<span style="color:#6b7280;font-size:12px">${f.group}</span><br>` : ''}
+      <span style="font-size:12px">${f.type} · ${f.commodity} · ${f.country}</span>
+      ${f.risk ? `<br><span style="font-size:11px;color:#6b7280">Risk: ${f.risk}</span>` : ''}
+    `);
+    return marker;
+  });
+
+  facilityCluster.addLayers(markers);
+  document.getElementById('projects-count').textContent = filtered.length;
 }
 
 function renderProjects() {
@@ -837,6 +922,7 @@ async function prefetchInBackground() {
     loadIEAData(),
     loadGTAData(),
     loadGTALiveData(),
+    loadFacilitiesData(),
     loadNewsData(),
   ]);
   fetchGTADescriptionsInBackground();
