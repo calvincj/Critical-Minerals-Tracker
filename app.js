@@ -43,6 +43,8 @@ function fmtUSD(n) {
 }
 
 // ── State ──
+const FRED_MINERALS = ["Gold","Silver","Copper","Nickel","Aluminum","Lead","Zinc","Platinum","Palladium","Cobalt"];
+
 let activeTab = "deals";
 let filters = {
   dealTypes: new Set(DEAL_TYPES),
@@ -50,8 +52,9 @@ let filters = {
   projectTypes: new Set(PROJECT_TYPES),
   priceDirection: new Set(["up", "down"]),
   countries: new Set(COUNTRIES),
+  fredMinerals: new Set(FRED_MINERALS),
 };
-const sectionOpen = { dealTypes: true, minerals: true, projectTypes: true, countries: false };
+const sectionOpen = { dealTypes: true, minerals: true, projectTypes: true, countries: false, fredMinerals: true };
 
 function toggleSection(key) {
   sectionOpen[key] = !sectionOpen[key];
@@ -99,7 +102,7 @@ function renderSidebar() {
       buildCheckboxGroup("Project Type", "projectTypes", PROJECT_TYPES) +
       buildMineralFilter(icmmMinerals);
   } else if (activeTab === "prices") {
-    aside.innerHTML = buildMineralFilter();
+    aside.innerHTML = buildCheckboxGroup("Mineral", "fredMinerals", FRED_MINERALS);
   }
 }
 
@@ -109,7 +112,8 @@ function buildSectionHeader(title, key) {
   const total = key === "countries" ? COUNTRIES.length
     : key === "dealTypes" ? DEAL_TYPES.length
     : key === "minerals" ? MINERALS.length
-    : key === "projectTypes" ? PROJECT_TYPES.length : null;
+    : key === "projectTypes" ? PROJECT_TYPES.length
+    : key === "fredMinerals" ? FRED_MINERALS.length : null;
   const countLabel = (!open && selected !== null && selected < total)
     ? ` <span class="filter-count">${selected}/${total}</span>` : "";
   return `<div class="filter-header">
@@ -190,6 +194,7 @@ function selectSection(key) {
   else if (key === "dealTypes") filters.dealTypes = new Set(DEAL_TYPES);
   else if (key === "countries") filters.countries = new Set(COUNTRIES);
   else if (key === "projectTypes") filters.projectTypes = new Set(PROJECT_TYPES);
+  else if (key === "fredMinerals") filters.fredMinerals = new Set(FRED_MINERALS);
   renderSidebar();
   renderContent();
 }
@@ -604,7 +609,7 @@ async function renderFredPrices() {
 
   if (fredData) { displayFredPrices(); return; }
 
-  const cached = cacheGet("fred_prices_v2", 86400000); // 24h
+  const cached = cacheGet("fred_prices_v3", 86400000); // 24h
   if (cached) { fredData = cached; displayFredPrices(); return; }
 
   container.innerHTML = `<div class="loading-row"><span class="spinner"></span> Loading historical prices…</div>`;
@@ -613,7 +618,7 @@ async function renderFredPrices() {
     const r = await fetch("/api/fred");
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     fredData = await r.json();
-    cacheSet("fred_prices_v2", fredData);
+    cacheSet("fred_prices_v3", fredData);
     displayFredPrices();
   } catch (err) {
     container.innerHTML = `<div class="empty"><p>Historical prices unavailable (${err.message})</p></div>`;
@@ -650,7 +655,9 @@ function displayFredPrices() {
 
   const cutoff = fredCutoff();
 
-  const cards = fredData.series.map(s => {
+  const visible = fredData.series.filter(s => filters.fredMinerals.has(s.name));
+
+  const cards = visible.map(s => {
     const pts = s.data.filter(d => d.date >= cutoff);
     if (pts.length < 2) return "";
     const latest = pts[pts.length - 1].value;
@@ -676,7 +683,7 @@ function displayFredPrices() {
     </div>
     <div class="fred-grid">${cards}</div>`;
 
-  fredData.series.forEach(s => {
+  visible.forEach(s => {
     const pts = s.data.filter(d => d.date >= cutoff);
     if (pts.length < 2) return;
     const id = "fred-" + s.name.toLowerCase().replace(/\s+/g, "-");
