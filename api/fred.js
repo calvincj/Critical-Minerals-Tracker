@@ -1,14 +1,11 @@
-// Quick probe: one candidate per unknown metal, minimal params
+// One-shot probe for remaining unknowns — read the actual FRED error messages
 const PROBES = [
-  { id: 'GOLDAMGBD228NLBM', note: 'gold-lbma-am'     },
-  { id: 'XAUUSD',           note: 'gold-xauusd'       },
-  { id: 'SLVPRUSD',         note: 'silver-lbma'       },
-  { id: 'XAGUSD',           note: 'silver-xagusd'     },
-  { id: 'PPLTMUSDM',        note: 'platinum-pltm'     },
-  { id: 'PPALAUSDM',        note: 'palladium-pala'    },
-  { id: 'PPALLADUSDM',      note: 'palladium-pallad'  },
-  { id: 'PCOBAUSDM',        note: 'cobalt-coba'       },
-  { id: 'PCOBALUSDM',       note: 'cobalt-cobal'      },
+  'GOLDAMGBD228NLBM',
+  'GOLDPMGBD228NLBM',
+  'XPTUSX',
+  'XPTUSM',
+  'PPALTM',
+  'PCOBAUSDM',
 ];
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -20,17 +17,15 @@ module.exports = async function handler(req, res) {
 
   const out = [];
   for (let i = 0; i < PROBES.length; i++) {
-    if (i > 0) await sleep(300);
-    const { id, note } = PROBES[i];
+    if (i > 0) await sleep(500);
+    const id = PROBES[i];
     try {
-      // minimal params — no observation_start, no sort_order, no frequency
       const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${id}&api_key=${apiKey}&file_type=json&limit=1`;
       const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
-      const text = await r.text();
-      const hasError = text.includes('"error_message"');
-      out.push({ id, note, status: r.status, ok: r.status === 200 && !hasError });
+      const json = await r.json();
+      out.push({ id, status: r.status, error: json.error_message || null, ok: r.status === 200 && !json.error_message });
     } catch (e) {
-      out.push({ id, note, status: 'timeout', ok: false });
+      out.push({ id, status: 'timeout', ok: false });
     }
   }
   res.json({ out });
