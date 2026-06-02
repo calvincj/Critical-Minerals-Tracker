@@ -351,7 +351,9 @@ async function renderIEAPolicies() {
 
   if (!ieaData || !gtaData) {
     container.innerHTML = `<div class="loading-row"><span class="spinner"></span> Loading policies…</div>`;
-    await Promise.all([loadIEAData(), loadGTAData(), loadGTALiveData(), loadGTADescriptions()]);
+    await Promise.all([loadIEAData(), loadGTAData(), loadGTALiveData()]);
+    loadGTADescriptions(); // sets gtaDescriptions = {} instantly if no cache
+    fetchGTADescriptionsInBackground(); // fires async, re-renders when done
   }
 
   const allGTA = mergeGTAData(gtaData || [], gtaLiveData || []);
@@ -677,28 +679,31 @@ async function loadGTADescriptions() {
   if (gtaDescriptions) return;
   const cached = cacheGet("gta_descriptions_v2", 86400000);
   if (cached) { gtaDescriptions = cached; return; }
-  try {
-    // Fetch batch count first, then all batches in parallel
-    const probe = await fetch("/api/gta-scrape?batch=0");
-    if (!probe.ok) throw new Error(`HTTP ${probe.status}`);
-    const first = await probe.json();
-    const total = first.totalBatches || 1;
+  gtaDescriptions = {}; // mark as loaded so we don't block
+}
 
-    // Fetch remaining batches in parallel alongside the first result
-    const rest = await Promise.allSettled(
-      Array.from({ length: total - 1 }, (_, i) =>
-        fetch(`/api/gta-scrape?batch=${i + 1}`).then(r => r.json())
-      )
-    );
+// Fetch full GTA descriptions in background after page renders
+function fetchGTADescriptionsInBackground() {
+  const cached = cacheGet("gta_descriptions_v2", 86400000);
+  if (cached) return; // already have them
 
-    gtaDescriptions = { ...first.descriptions };
-    for (const r of rest) {
-      if (r.status === 'fulfilled') Object.assign(gtaDescriptions, r.value.descriptions || {});
+  // Fire all 6 batches — each is cached independently on CDN
+  const TOTAL = 6;
+  Promise.allSettled(
+    Array.from({ length: TOTAL }, (_, i) =>
+      fetch(`/api/gta-scrape?batch=${i}`).then(r => r.ok ? r.json() : {})
+    )
+  ).then(results => {
+    const merged = {};
+    for (const r of results) {
+      if (r.status === 'fulfilled') Object.assign(merged, r.value.descriptions || {});
     }
-    cacheSet("gta_descriptions_v2", gtaDescriptions);
-  } catch (_) {
-    gtaDescriptions = {};
-  }
+    if (Object.keys(merged).length > 0) {
+      gtaDescriptions = merged;
+      cacheSet("gta_descriptions_v2", merged);
+      renderContent(); // re-render with full descriptions
+    }
+  }).catch(() => {});
 }
 
 // Merge static + live GTA, deduplicate by id, live wins on conflict
@@ -816,9 +821,9 @@ async function prefetchInBackground() {
     loadIEAData(),
     loadGTAData(),
     loadGTALiveData(),
-    loadGTADescriptions(),
     loadNewsData(),
   ]);
+  fetchGTADescriptionsInBackground();
 }
 
 // ── Mobile filter toggle ──
