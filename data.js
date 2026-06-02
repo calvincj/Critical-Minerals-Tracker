@@ -4,7 +4,7 @@ const PRICES = [];
 
 const DEAL_TYPES = ["Trade Control", "Trade Deal", "Investment Agreement", "Non-Investment Agreement", "Statement", "Subsidy"];
 const MINERALS = ["Cobalt", "Copper", "Graphite", "Lithium", "Manganese", "Nickel", "Rare Earths", "Silicon", "General", "Others"];
-const PROJECT_TYPES = ["Mine", "Refinery"];
+const PROJECT_TYPES = ["Mine", "Refinery", "Smelter", "Other"];
 
 const MINERAL_GROUPS = [
   { label: "Battery", minerals: ["Lithium", "Cobalt", "Nickel", "Graphite", "Manganese", "Copper"] },

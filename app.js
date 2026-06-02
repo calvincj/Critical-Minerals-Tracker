@@ -89,9 +89,12 @@ function renderSidebar() {
       buildMineralFilter() +
       buildCountryFilter();
   } else if (activeTab === "projects") {
+    const icmmMinerals = facilitiesData
+      ? [...new Set(facilitiesData.map(f => f.mineral))].filter(m => MINERALS.includes(m)).sort()
+      : null;
     aside.innerHTML =
       buildCheckboxGroup("Project Type", "projectTypes", PROJECT_TYPES) +
-      buildMineralFilter();
+      buildMineralFilter(icmmMinerals);
   } else if (activeTab === "prices") {
     aside.innerHTML = buildMineralFilter();
   }
@@ -133,15 +136,19 @@ function buildCheckboxGroup(title, filterKey, options, labelFn = v => v) {
   </div>`;
 }
 
-function buildMineralFilter() {
+function buildMineralFilter(mineralList) {
+  const list = mineralList || MINERALS;
   const open = sectionOpen["minerals"] !== false;
-  const groupButtons = MINERAL_GROUPS.map((g, i) => {
-    const exactMatch = g.minerals.length === filters.minerals.size &&
-      g.minerals.every(m => filters.minerals.has(m));
-    return `<button class="group-btn${exactMatch ? " active" : ""}" onclick="selectMineralGroup(${i})">${g.label}</button>`;
-  }).join("");
+  const groupButtons = MINERAL_GROUPS
+    .map((g, i) => {
+      const inList = g.minerals.filter(m => list.includes(m));
+      if (!inList.length) return '';
+      const exactMatch = inList.length === filters.minerals.size &&
+        inList.every(m => filters.minerals.has(m));
+      return `<button class="group-btn${exactMatch ? " active" : ""}" onclick="selectMineralGroup(${i})">${g.label}</button>`;
+    }).join("");
 
-  const checkboxes = MINERALS.map(m => {
+  const checkboxes = list.map(m => {
     const checked = filters.minerals.has(m) ? "checked" : "";
     return `<label>
       <input type="checkbox" ${checked} onchange="toggleFilter('minerals', '${m}', this.checked)">
@@ -152,7 +159,7 @@ function buildMineralFilter() {
   return `<div class="filter-group">
     ${buildSectionHeader("Mineral", "minerals")}
     ${open ? `<div class="filter-group-body">
-      <div class="group-btns">${groupButtons}</div>
+      ${groupButtons ? `<div class="group-btns">${groupButtons}</div>` : ""}
       <div class="mineral-checks">${checkboxes}</div>
     </div>` : ""}
   </div>`;
@@ -493,18 +500,30 @@ async function loadFacilitiesData() {
 }
 
 async function renderFacilitiesMap() {
+  const wasLoaded = !!facilitiesData;
   await loadFacilitiesData();
+  if (!wasLoaded && facilitiesData) renderSidebar(); // refresh mineral list once data arrives
   const mapEl = document.getElementById('facilities-map');
   if (!mapEl) return;
 
   // Init map once
   if (!facilityMap) {
-    facilityMap = L.map('facilities-map', { preferCanvas: true }).setView([20, 0], 2);
+    facilityMap = L.map('facilities-map', {
+      preferCanvas: true,
+      zoomSnap: 0.25,
+      zoomDelta: 0.5,
+      wheelPxPerZoomLevel: 80,
+    }).setView([20, 0], 2);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       attribution: '© OpenStreetMap © CARTO',
       maxZoom: 18,
     }).addTo(facilityMap);
-    facilityCluster = L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 40 });
+    facilityCluster = L.markerClusterGroup({
+      chunkedLoading: true,
+      maxClusterRadius: 40,
+      disableClusteringAtZoom: 7,
+      animate: true,
+    });
     facilityMap.addLayer(facilityCluster);
   }
 
@@ -526,7 +545,7 @@ async function renderFacilitiesMap() {
 
   const filtered = (facilitiesData || []).filter(f => {
     if (!activeMineral.has(f.mineral)) return false;
-    if (!activeType.has(f.type) && activeType.size < PROJECT_TYPES.length) return false;
+    if (!activeType.has(f.type)) return false;
     return true;
   });
 
@@ -540,12 +559,11 @@ async function renderFacilitiesMap() {
       opacity: 0.9,
       fillOpacity: 0.8,
     });
-    marker.bindPopup(`
+    const popupContent = `
       <strong>${f.name}</strong><br>
       ${f.group ? `<span style="color:#6b7280;font-size:12px">${f.group}</span><br>` : ''}
-      <span style="font-size:12px">${f.type} · ${f.commodity} · ${f.country}</span>
-      ${f.risk ? `<br><span style="font-size:11px;color:#6b7280">Risk: ${f.risk}</span>` : ''}
-    `);
+      <span style="font-size:12px">${f.type} · ${f.commodity} · ${f.country}</span>`;
+    marker.bindTooltip(popupContent, { sticky: true, opacity: 0.95 });
     return marker;
   });
 
@@ -560,10 +578,8 @@ function renderProjects() {
   ).sort((a, b) => b.dateISO.localeCompare(a.dateISO));
 
   const container = document.getElementById("projects-list");
-  document.getElementById("projects-count").textContent = filtered.length;
-
   if (filtered.length === 0) {
-    container.innerHTML = `<div class="empty"><p>No projects match the selected filters.</p></div>`;
+    container.innerHTML = "";
     return;
   }
 
