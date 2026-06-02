@@ -12,24 +12,31 @@ async function getToken() {
   return data.access || data.token || null;
 }
 
+function stripHtml(str) {
+  return str
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"').replace(/&#x27;/g, "'").replace(/&#39;/g, "'")
+    .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 async function scrapeOne(url, cookieHeader) {
   try {
     const resp = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36', 'Cookie': cookieHeader },
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(12000),
     });
     const html = await resp.text();
 
-    // Authenticated page: full description is in the text-[14px] paragraph
+    // Authenticated page: full description in the text-[14px] paragraph
     const m = html.match(/class="text-\[14px\][^"]*"[^>]*>([\s\S]*?)<\/p>/);
     if (m) {
-      const text = m[1].replace(/<[^>]+>/g, '').replace(/&#x27;/g, "'").replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/\s+/g, ' ').trim();
+      const text = stripHtml(m[1]);
       if (text.length > 50 && !text.includes('Sign in')) return text;
     }
 
-    // Fallback: meta description (truncated, but better than nothing)
+    // Fallback: meta description (truncated)
     const m2 = html.match(/name="description"[^>]+content="([^"]+)"/);
-    if (m2) return m2[1].replace(/&#x27;/g, "'").replace(/&amp;/g, '&').trim();
+    if (m2) return stripHtml(m2[1]);
   } catch (_) {}
   return null;
 }
@@ -51,16 +58,19 @@ module.exports = async function handler(req, res) {
   if (!token) return res.json({ descriptions: {}, error: 'No token returned' });
 
   const cookieHeader = `auth._token.local=${encodeURIComponent(`Bearer ${token}`)}`;
-  const descriptions = {};
 
-  // Batch into groups of 40 to avoid overwhelming GTA's servers
-  const BATCH = 40;
-  for (let i = 0; i < interventions.length; i += BATCH) {
-    const batch = interventions.slice(i, i + BATCH);
-    await Promise.all(batch.map(async ({ id, link }) => {
-      const desc = await scrapeOne(link, cookieHeader);
-      if (desc) descriptions[id] = desc;
-    }));
+  // Fire all 292 requests simultaneously — Node.js event loop handles this fine
+  const results = await Promise.allSettled(
+    interventions.map(({ id, link }) =>
+      scrapeOne(link, cookieHeader).then(desc => ({ id, desc }))
+    )
+  );
+
+  const descriptions = {};
+  for (const r of results) {
+    if (r.status === 'fulfilled' && r.value.desc) {
+      descriptions[r.value.id] = r.value.desc;
+    }
   }
 
   res.json({ descriptions, count: Object.keys(descriptions).length, fetchedAt: new Date().toISOString() });
