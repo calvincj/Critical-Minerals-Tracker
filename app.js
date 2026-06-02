@@ -20,6 +20,12 @@ function isNew(dateISO) {
 function newBadge() {
   return `<span class="new-badge">NEW</span>`;
 }
+function truncateDesc(text, max = 380) {
+  if (!text || text.length <= max) return text;
+  const cut = text.lastIndexOf(' ', max);
+  return text.slice(0, cut > 0 ? cut : max) + '…';
+}
+
 function fmtUSD(n) {
   if (n >= 1e9) return `$${(n / 1e9).toFixed(1)}B`;
   if (n >= 1e6) return `$${(n / 1e6).toFixed(0)}M`;
@@ -414,7 +420,7 @@ async function renderIEAPolicies() {
     const minerals = extractMinerals(p.title + " " + p.description, p.aiMinerals).filter(m => filters.minerals.has(m));
     const dateStr = fmtIEADate(p.dateISO);
     const title = p.aiTitle || p.title;
-    const summary = p.aiSummary || p.description || "";
+    const summary = truncateDesc(p.aiSummary || p.description || "");
     cards.push({ dateISO: p.dateISO, html: `
       <div class="deal-card">
         <div class="deal-meta">
@@ -431,7 +437,7 @@ async function renderIEAPolicies() {
   }
 
   for (const i of gtaFiltered) {
-    const gtaSummary = (gtaDescriptions && gtaDescriptions[i.id]) || i.description || "";
+    const gtaSummary = truncateDesc((gtaDescriptions && gtaDescriptions[i.id]) || i.description || "");
     cards.push({ dateISO: i.dateISO, html: `
       <div class="deal-card${isNew(i.dateISO) ? " is-new" : ""}">
         <div class="deal-meta">
@@ -623,7 +629,7 @@ async function renderSCMPNews(section, containerId, countId) {
           <span class="source-badge">SCMP</span>
         </div>
         <div class="project-name">${a.title}</div>
-        <p class="deal-summary">${a.summary}</p>
+        <p class="deal-summary">${truncateDesc(a.summary)}</p>
         <div class="deal-footer">
           <a href="${a.link}" target="_blank" rel="noopener" class="deal-link">Read article →</a>
         </div>
