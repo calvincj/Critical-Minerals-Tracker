@@ -495,45 +495,20 @@ main {
 }
 
 .fred-card {
-  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 14px 16px;
+  overflow: hidden;
   transition: border-color 0.15s;
+  min-height: 200px;
 }
 .fred-card:hover { border-color: #cbd5e1; }
 
-.fred-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px;
-  margin-bottom: 2px;
-  flex-wrap: wrap;
+.tv-widget-wrap {
+  width: 100%;
+  height: 200px;
 }
-
-.fred-name { font-size: 14px; font-weight: 600; }
-
-.fred-price {
-  font-size: 13px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.fred-unit { font-size: 10px; font-weight: 400; color: var(--text-muted); }
-
-.fred-pct {
-  font-size: 11px;
-  font-weight: 600;
-  margin-bottom: 10px;
-}
-.fred-pct.up   { color: var(--up); }
-.fred-pct.down { color: var(--down); }
-
-.fred-chart-wrap {
-  position: relative;
-  height: 120px;
+.tv-widget-wrap .tradingview-widget-container__widget {
+  height: 100% !important;
 }
 
 /* ── Price cards ── */

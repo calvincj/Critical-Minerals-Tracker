@@ -43,7 +43,19 @@ function fmtUSD(n) {
 }
 
 // ── State ──
-const FRED_MINERALS = ["Gold","Silver","Platinum","Palladium","Copper","Nickel","Aluminum","Lead","Zinc"];
+const TV_MINERALS = [
+  { name: "Gold",      symbol: "CAPITALCOM:GOLD"     },
+  { name: "Silver",    symbol: "TVC:SILVER"           },
+  { name: "Platinum",  symbol: "CAPITALCOM:PLATINUM"  },
+  { name: "Palladium", symbol: "TVC:PALLADIUM"        },
+  { name: "Copper",    symbol: "CAPITALCOM:COPPER"    },
+  { name: "Nickel",    symbol: "CAPITALCOM:NICKEL"    },
+  { name: "Aluminum",  symbol: "CAPITALCOM:ALUMINUM"  },
+  { name: "Lead",      symbol: "CAPITALCOM:LEAD"      },
+  { name: "Zinc",      symbol: "PEPPERSTONE:ZINC"     },
+  { name: "Cobalt",    symbol: "CAPITALCOM:COBALT"    },
+];
+const FRED_MINERALS = TV_MINERALS.map(m => m.name);
 
 let activeTab = "deals";
 let filters = {
@@ -60,9 +72,8 @@ function toggleSection(key) {
   sectionOpen[key] = !sectionOpen[key];
   renderSidebar();
 }
-let fredData = null;
 let fredRange = '5Y';
-const fredCharts = {};
+let tvRenderedRange = null;
 let newsData = null;
 let tradeData = null;
 let gtaData = null;
@@ -602,130 +613,75 @@ function renderProjects() {
 }
 
 
-// ── FRED Historical Prices ──
-async function renderFredPrices() {
-  const container = document.getElementById("fred-container");
-  if (!container) return;
+// ── TradingView Historical Price Charts ──
+const TV_RANGE_MAP = { "1Y": "12M", "5Y": "60M", "ALL": "ALL" };
 
-  if (fredData) { displayFredPrices(); return; }
-
-  const cached = cacheGet("fred_prices_v5", 86400000); // 24h
-  if (cached) { fredData = cached; displayFredPrices(); return; }
-
-  container.innerHTML = `<div class="loading-row"><span class="spinner"></span> Loading historical prices…</div>`;
-
-  try {
-    const r = await fetch("/api/fred");
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    fredData = await r.json();
-    cacheSet("fred_prices_v5", fredData);
-    displayFredPrices();
-  } catch (err) {
-    container.innerHTML = `<div class="empty"><p>Historical prices unavailable (${err.message})</p></div>`;
-  }
+function renderFredPrices() {
+  displayFredPrices();
 }
 
 function setFredRange(range) {
   fredRange = range;
+  tvRenderedRange = null; // force widget recreation
   displayFredPrices();
 }
 
-function fredCutoff() {
-  const years = { "1Y": 1, "3Y": 3, "5Y": 5, "10Y": 10 }[fredRange] || 5;
-  const d = new Date();
-  d.setFullYear(d.getFullYear() - years);
-  return d.toISOString().slice(0, 10);
-}
-
-function fmtCommodityPrice(v) {
-  if (v == null) return "—";
-  if (v >= 10000) return v.toLocaleString("en-US", { maximumFractionDigits: 0 });
-  if (v >= 100)   return v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
 function displayFredPrices() {
-  for (const id in fredCharts) { fredCharts[id].destroy(); delete fredCharts[id]; }
-
   const container = document.getElementById("fred-container");
-  if (!fredData?.series?.length) {
-    container.innerHTML = `<div class="empty"><p>No historical price data available.</p></div>`;
+  if (!container) return;
+  const tvRange = TV_RANGE_MAP[fredRange] || "12M";
+
+  // Range unchanged → just toggle card visibility without recreating widgets
+  if (tvRenderedRange === tvRange) {
+    TV_MINERALS.forEach(m => {
+      const card = document.getElementById("tv-card-" + m.name.toLowerCase().replace(/\s+/g, "-"));
+      if (card) card.style.display = filters.fredMinerals.has(m.name) ? "" : "none";
+    });
     return;
   }
+  tvRenderedRange = tvRange;
 
-  const cutoff = fredCutoff();
-
-  const visible = fredData.series.filter(s => filters.fredMinerals.has(s.name));
-
-  const cards = visible.map(s => {
-    const pts = s.data.filter(d => d.date >= cutoff);
-    if (pts.length < 2) return "";
-    const latest = pts[pts.length - 1].value;
-    const pct = ((latest - pts[0].value) / pts[0].value) * 100;
-    const dir = pct >= 0 ? "up" : "down";
-    const id = "fred-" + s.name.toLowerCase().replace(/\s+/g, "-");
-    return `
-      <div class="fred-card">
-        <div class="fred-card-header">
-          <span class="fred-name">${s.name}</span>
-          <span class="fred-price">${fmtCommodityPrice(latest)}<span class="fred-unit"> ${s.unit}</span></span>
-        </div>
-        <div class="fred-pct ${dir}">${pct >= 0 ? "+" : ""}${pct.toFixed(1)}% (${fredRange})</div>
-        <div class="fred-chart-wrap"><canvas id="${id}"></canvas></div>
-      </div>`;
-  }).join("");
-
+  // Build grid HTML (no <script> tags — injected separately below)
   container.innerHTML = `
     <div class="fred-controls">
-      ${["1Y","3Y","5Y","10Y"].map(r =>
+      ${["1Y","5Y","ALL"].map(r =>
         `<button class="fred-range-btn${r === fredRange ? " active" : ""}" onclick="setFredRange('${r}')">${r}</button>`
       ).join("")}
     </div>
-    <div class="fred-grid">${cards}</div>`;
+    <div class="fred-grid">
+      ${TV_MINERALS.map(m => {
+        const id = m.name.toLowerCase().replace(/\s+/g, "-");
+        const hidden = !filters.fredMinerals.has(m.name) ? ' style="display:none"' : "";
+        return `<div class="fred-card tv-card" id="tv-card-${id}"${hidden}>
+          <div class="tv-widget-wrap" id="tv-wrap-${id}"></div>
+        </div>`;
+      }).join("")}
+    </div>`;
 
-  visible.forEach(s => {
-    const pts = s.data.filter(d => d.date >= cutoff);
-    if (pts.length < 2) return;
-    const id = "fred-" + s.name.toLowerCase().replace(/\s+/g, "-");
-    const canvas = document.getElementById(id);
-    if (!canvas) return;
-    const pct = (pts[pts.length - 1].value - pts[0].value) / pts[0].value;
-    const color = pct >= 0 ? "#15803d" : "#b91c1c";
-    fredCharts[id] = new Chart(canvas, {
-      type: "line",
-      data: {
-        labels: pts.map(d => d.date),
-        datasets: [{
-          data: pts.map(d => d.value),
-          borderColor: color,
-          borderWidth: 1.5,
-          fill: true,
-          backgroundColor: pct >= 0 ? "rgba(21,128,61,0.08)" : "rgba(185,28,28,0.08)",
-          pointRadius: 0,
-          tension: 0.2,
-        }],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            mode: "index",
-            intersect: false,
-            callbacks: {
-              title: ctx => ctx[0].label,
-              label: ctx => `${fmtCommodityPrice(ctx.raw)} ${s.unit}`,
-            },
-          },
-        },
-        scales: {
-          x: { display: false },
-          y: { display: false, grace: "5%" },
-        },
-      },
+  // Inject TradingView widget scripts (innerHTML won't execute scripts — must use createElement)
+  TV_MINERALS.forEach(m => {
+    const id = m.name.toLowerCase().replace(/\s+/g, "-");
+    const wrap = document.getElementById("tv-wrap-" + id);
+    if (!wrap) return;
+    wrap.className = "tradingview-widget-container tv-widget-wrap";
+    const inner = document.createElement("div");
+    inner.className = "tradingview-widget-container__widget";
+    wrap.appendChild(inner);
+    const script = document.createElement("script");
+    script.type = "text/javascript";
+    script.async = true;
+    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js";
+    script.textContent = JSON.stringify({
+      symbol: m.symbol,
+      width: "100%",
+      height: 200,
+      locale: "en",
+      dateRange: tvRange,
+      colorTheme: "light",
+      isTransparent: true,
+      autosize: true,
     });
+    wrap.appendChild(script);
   });
 }
 
