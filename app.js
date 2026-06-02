@@ -22,7 +22,11 @@ function newBadge() {
 }
 function truncateDesc(text, max = 400) {
   if (!text) return text;
-  const clean = text.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const clean = text
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (clean.length <= max) return clean;
   const cut = clean.lastIndexOf(' ', max);
   return clean.slice(0, cut > 0 ? cut : max) + '…';

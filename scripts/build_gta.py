@@ -47,21 +47,24 @@ def fetch_description(intervention_id, link, cookie_header=None):
         if cookie_header:
             headers['Cookie'] = cookie_header
         req = urllib.request.Request(url, headers=headers)
-        html = urllib.request.urlopen(req, timeout=10).read().decode('utf-8', errors='ignore')
+        html = urllib.request.urlopen(req, timeout=20).read().decode('utf-8', errors='ignore')
+
+        import html as html_module
 
         # Authenticated: full description in text-[14px] paragraph
         if cookie_header:
             m = re.search(r'class="text-\[14px\][^"]*"[^>]*>([\s\S]*?)</p>', html)
             if m:
-                import html as html_module
-                text = html_module.unescape(re.sub(r'<[^>]+>', '', m.group(1))).strip()
+                # Unescape first so encoded tags like &lt;p&gt; become real tags,
+                # then strip all tags, then collapse whitespace
+                text = re.sub(r'<[^>]+>', ' ', html_module.unescape(m.group(1)))
+                text = re.sub(r'\s+', ' ', text).strip()
                 if len(text) > 50 and 'Sign in' not in text:
                     return text
 
         # Fallback: meta description (truncated)
         m = re.search(r'<meta[^>]+name="description"[^>]+content="([^"]+)"', html)
         if m:
-            import html as html_module
             return html_module.unescape(m.group(1)).strip()
     except Exception:
         pass
@@ -166,25 +169,41 @@ else:
     print("Using unauthenticated scraping (truncated ~200 char descriptions)")
     print("  → Set GTA_EMAIL and GTA_PASSWORD env vars for full descriptions")
 
-print(f"Scraping {len(interventions)} interventions (20 parallel)...")
-scraped, failed = 0, 0
+def scrape_pass(targets, workers, label):
+    """targets: list of (idx, intervention). Returns list of idx that failed."""
+    failed_idx = []
+    done = 0
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(fetch_description, i['id'], i['link'], cookie_header): idx
+                   for idx, i in targets}
+        for future in as_completed(futures):
+            idx = futures[future]
+            desc = future.result()
+            done += 1
+            if desc:
+                interventions[idx]['description'] = desc
+            else:
+                failed_idx.append(idx)
+            sys.stdout.write(f"\r  {label}: {done}/{len(targets)} done  ({len(failed_idx)} failed so far)")
+            sys.stdout.flush()
+    print()
+    return failed_idx
 
-with ThreadPoolExecutor(max_workers=20) as pool:
-    futures = {pool.submit(fetch_description, i['id'], i['link'], cookie_header): idx for idx, i in enumerate(interventions)}
-    for future in as_completed(futures):
-        idx = futures[future]
-        desc = future.result()
-        if desc:
-            interventions[idx]['description'] = desc
-            scraped += 1
-        else:
-            interventions[idx]['description'] = None
-            failed += 1
-        done = scraped + failed
-        sys.stdout.write(f"\r  {done}/{len(interventions)} done  ({scraped} ok, {failed} failed)")
-        sys.stdout.flush()
+# Pass 1: 5 workers (polite pace, 20s timeout in fetch_description)
+print(f"Pass 1: scraping {len(interventions)} interventions (5 parallel)...")
+targets = list(enumerate(interventions))
+failed_idx = scrape_pass(targets, workers=5, label="pass 1")
 
-print(f"\n  Scraped: {scraped}  Failed: {failed}")
+# Pass 2: retry failures one at a time
+if failed_idx:
+    print(f"Pass 2: retrying {len(failed_idx)} failures (1 at a time, slower)...")
+    retry_targets = [(idx, interventions[idx]) for idx in failed_idx]
+    still_failed = scrape_pass(retry_targets, workers=1, label="pass 2")
+    print(f"  Final failures: {len(still_failed)}")
+
+scraped = sum(1 for i in interventions if i.get('description'))
+failed = len(interventions) - scraped
+print(f"  Scraped: {scraped}  Failed: {failed}")
 
 # ── Write output ───────────────────────────────────────────────────────────
 out_path = os.path.join(ROOT, 'data/gta-interventions.json')
