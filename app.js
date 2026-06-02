@@ -518,12 +518,8 @@ async function renderFacilitiesMap() {
       attribution: '© OpenStreetMap © CARTO',
       maxZoom: 18,
     }).addTo(facilityMap);
-    facilityCluster = L.markerClusterGroup({
-      chunkedLoading: true,
-      maxClusterRadius: 40,
-      disableClusteringAtZoom: 7,
-      animate: true,
-    });
+    // Use a plain LayerGroup with canvas — no cluster numbers, just dots at every zoom
+    facilityCluster = L.layerGroup();
     facilityMap.addLayer(facilityCluster);
   }
 
@@ -567,7 +563,7 @@ async function renderFacilitiesMap() {
     return marker;
   });
 
-  facilityCluster.addLayers(markers);
+  markers.forEach(m => facilityCluster.addLayer(m));
   document.getElementById('projects-count').textContent = filtered.length;
 }
 
