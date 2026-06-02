@@ -535,7 +535,7 @@ async function renderFacilitiesMap() {
         <div class="map-legend-dot" style="background:${color}"></div>
         <span>${type}</span>
       </div>`
-    ).join('') + `<span style="margin-left:auto;color:var(--text-muted);font-size:11px">${(facilitiesData||[]).length.toLocaleString()} facilities · ICMM</span>`;
+    ).join('');
   }
 
   facilityCluster.clearLayers();
