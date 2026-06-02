@@ -675,14 +675,27 @@ async function loadGTALiveData() {
 
 async function loadGTADescriptions() {
   if (gtaDescriptions) return;
-  const cached = cacheGet("gta_descriptions_v1", 86400000);
+  const cached = cacheGet("gta_descriptions_v2", 86400000);
   if (cached) { gtaDescriptions = cached; return; }
   try {
-    const r = await fetch("/api/gta-scrape");
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const json = await r.json();
-    gtaDescriptions = json.descriptions || {};
-    cacheSet("gta_descriptions_v1", gtaDescriptions);
+    // Fetch batch count first, then all batches in parallel
+    const probe = await fetch("/api/gta-scrape?batch=0");
+    if (!probe.ok) throw new Error(`HTTP ${probe.status}`);
+    const first = await probe.json();
+    const total = first.totalBatches || 1;
+
+    // Fetch remaining batches in parallel alongside the first result
+    const rest = await Promise.allSettled(
+      Array.from({ length: total - 1 }, (_, i) =>
+        fetch(`/api/gta-scrape?batch=${i + 1}`).then(r => r.json())
+      )
+    );
+
+    gtaDescriptions = { ...first.descriptions };
+    for (const r of rest) {
+      if (r.status === 'fulfilled') Object.assign(gtaDescriptions, r.value.descriptions || {});
+    }
+    cacheSet("gta_descriptions_v2", gtaDescriptions);
   } catch (_) {
     gtaDescriptions = {};
   }

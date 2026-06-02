@@ -1,5 +1,8 @@
 const { interventions } = require('../data/gta-interventions.json');
 
+const BATCH_SIZE = 50;
+const TOTAL_BATCHES = Math.ceil(interventions.length / BATCH_SIZE);
+
 async function getToken() {
   const resp = await fetch('https://api.globaltradealert.org/v1/auth/token/', {
     method: 'POST',
@@ -27,14 +30,12 @@ async function scrapeOne(url, cookieHeader) {
     });
     const html = await resp.text();
 
-    // Authenticated page: full description in the text-[14px] paragraph
     const m = html.match(/class="text-\[14px\][^"]*"[^>]*>([\s\S]*?)<\/p>/);
     if (m) {
       const text = stripHtml(m[1]);
       if (text.length > 50 && !text.includes('Sign in')) return text;
     }
 
-    // Fallback: meta description (truncated)
     const m2 = html.match(/name="description"[^>]+content="([^"]+)"/);
     if (m2) return stripHtml(m2[1]);
   } catch (_) {}
@@ -42,10 +43,17 @@ async function scrapeOne(url, cookieHeader) {
 }
 
 module.exports = async function handler(req, res) {
+  // Each batch URL is cached independently on CDN for 24h
   res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=3600');
 
   if (!process.env.GTA_EMAIL || !process.env.GTA_PASSWORD) {
     return res.json({ descriptions: {}, error: 'GTA credentials not configured' });
+  }
+
+  // ?batch=N selects which 50-record chunk to process
+  const batchIndex = parseInt(req.query?.batch ?? '0', 10);
+  if (isNaN(batchIndex) || batchIndex < 0 || batchIndex >= TOTAL_BATCHES) {
+    return res.json({ descriptions: {}, totalBatches: TOTAL_BATCHES });
   }
 
   let token;
@@ -54,16 +62,13 @@ module.exports = async function handler(req, res) {
   } catch (err) {
     return res.json({ descriptions: {}, error: err.message });
   }
-
   if (!token) return res.json({ descriptions: {}, error: 'No token returned' });
 
   const cookieHeader = `auth._token.local=${encodeURIComponent(`Bearer ${token}`)}`;
+  const slice = interventions.slice(batchIndex * BATCH_SIZE, (batchIndex + 1) * BATCH_SIZE);
 
-  // Fire all 292 requests simultaneously — Node.js event loop handles this fine
   const results = await Promise.allSettled(
-    interventions.map(({ id, link }) =>
-      scrapeOne(link, cookieHeader).then(desc => ({ id, desc }))
-    )
+    slice.map(({ id, link }) => scrapeOne(link, cookieHeader).then(desc => ({ id, desc })))
   );
 
   const descriptions = {};
@@ -73,5 +78,5 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  res.json({ descriptions, count: Object.keys(descriptions).length, fetchedAt: new Date().toISOString() });
+  res.json({ descriptions, batch: batchIndex, totalBatches: TOTAL_BATCHES, count: Object.keys(descriptions).length });
 };
