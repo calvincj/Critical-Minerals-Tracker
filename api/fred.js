@@ -1,4 +1,4 @@
-// Base metals from FRED (IMF Primary Commodity Prices, monthly)
+// Base metals: FRED (IMF Primary Commodity Prices, monthly)
 const FRED_SERIES = [
   { id: 'PCOPPUSDM', name: 'Copper',   unit: 'USD/metric ton' },
   { id: 'PNICKUSDM', name: 'Nickel',   unit: 'USD/metric ton' },
@@ -7,12 +7,12 @@ const FRED_SERIES = [
   { id: 'PZINCUSDM', name: 'Zinc',     unit: 'USD/metric ton' },
 ];
 
-// Precious metals from Yahoo Finance (monthly futures)
-const YAHOO_SERIES = [
-  { symbol: 'GC=F', name: 'Gold',      unit: 'USD/troy oz' },
-  { symbol: 'SI=F', name: 'Silver',    unit: 'USD/troy oz' },
-  { symbol: 'PL=F', name: 'Platinum',  unit: 'USD/troy oz' },
-  { symbol: 'PA=F', name: 'Palladium', unit: 'USD/troy oz' },
+// Precious metals: Stooq.com (monthly futures CSV, no auth)
+const STOOQ_SERIES = [
+  { symbol: 'gc.f', name: 'Gold',      unit: 'USD/troy oz' },
+  { symbol: 'si.f', name: 'Silver',    unit: 'USD/troy oz' },
+  { symbol: 'pl.f', name: 'Platinum',  unit: 'USD/troy oz' },
+  { symbol: 'pa.f', name: 'Palladium', unit: 'USD/troy oz' },
 ];
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -23,22 +23,20 @@ module.exports = async function handler(req, res) {
   const apiKey = process.env.FRED_API_KEY;
   if (!apiKey) return res.status(500).json({ series: [], error: 'FRED_API_KEY not configured' });
 
-  const startStr = (() => {
-    const d = new Date();
-    d.setFullYear(d.getFullYear() - 10);
-    return d.toISOString().slice(0, 10);
-  })();
+  const start = new Date();
+  start.setFullYear(start.getFullYear() - 10);
+  const startStr = start.toISOString().slice(0, 10);
 
-  // FRED and Yahoo run in parallel (different hosts, no shared rate limit)
-  const [fredResults, yahooResults] = await Promise.all([
+  const [fredResults, stooqResults] = await Promise.all([
     fetchAllFred(FRED_SERIES, apiKey, startStr),
-    fetchAllYahoo(YAHOO_SERIES),
+    fetchAllStooq(STOOQ_SERIES, startStr),
   ]);
 
-  const series = [...yahooResults, ...fredResults].filter(Boolean);
+  const series = [...stooqResults, ...fredResults].filter(Boolean);
   res.json({ series, fetchedAt: new Date().toISOString() });
 };
 
+// ── FRED ──
 async function fetchAllFred(list, apiKey, startStr) {
   const results = [];
   for (let i = 0; i < list.length; i++) {
@@ -62,26 +60,36 @@ async function fetchFred(s, apiKey, startStr) {
   } catch (_) { return null; }
 }
 
-async function fetchAllYahoo(list) {
-  return Promise.all(list.map(fetchYahoo));
+// ── Stooq ──
+async function fetchAllStooq(list, startStr) {
+  return Promise.all(list.map(s => fetchStooq(s, startStr)));
 }
 
-async function fetchYahoo(s) {
+async function fetchStooq(s, startStr) {
   try {
-    const url = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(s.symbol)}?interval=1mo&range=10y`;
+    const d1 = startStr.replace(/-/g, '');
+    const d2 = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const url = `https://stooq.com/q/d/l/?s=${s.symbol}&d1=${d1}&d2=${d2}&i=m`;
     const r = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; research-bot/1.0)' },
       signal: AbortSignal.timeout(10000),
     });
     if (!r.ok) return null;
-    const json = await r.json();
-    const result = json?.chart?.result?.[0];
-    if (!result) return null;
-    const timestamps = result.timestamp || [];
-    const closes = result.indicators?.quote?.[0]?.close || [];
-    const data = timestamps
-      .map((ts, i) => ({ date: new Date(ts * 1000).toISOString().slice(0, 10), value: closes[i] }))
-      .filter(d => d.value != null);
+    const csv = await r.text();
+    const lines = csv.trim().split('\n');
+    if (lines.length < 2) return null;
+
+    // CSV: Date,Open,High,Low,Close,Volume
+    const data = lines.slice(1)
+      .map(line => {
+        const cols = line.split(',');
+        const date = cols[0]?.trim();
+        const close = parseFloat(cols[4]);
+        return date && !isNaN(close) ? { date, value: close } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.date.localeCompare(b.date));
+
     return data.length >= 2 ? { name: s.name, unit: s.unit, data } : null;
   } catch (_) { return null; }
 }
