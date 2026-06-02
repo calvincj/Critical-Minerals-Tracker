@@ -4,7 +4,7 @@ async function getToken() {
   const resp = await fetch('https://api.globaltradealert.org/v1/auth/token/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Origin': 'https://globaltradealert.org', 'Referer': 'https://globaltradealert.org/' },
-    body: JSON.stringify({ username: process.env.GTA_USERNAME, password: process.env.GTA_PASSWORD, application: 'GTA_WEBSITE' }),
+    body: JSON.stringify({ username: process.env.GTA_EMAIL, password: process.env.GTA_PASSWORD, application: 'GTA_WEBSITE' }),
     signal: AbortSignal.timeout(10000),
   });
   if (!resp.ok) throw new Error(`Login failed: ${resp.status}`);
@@ -37,7 +37,7 @@ async function scrapeOne(url, cookieHeader) {
 module.exports = async function handler(req, res) {
   res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=3600');
 
-  if (!process.env.GTA_USERNAME || !process.env.GTA_PASSWORD) {
+  if (!process.env.GTA_EMAIL || !process.env.GTA_PASSWORD) {
     return res.json({ descriptions: {}, error: 'GTA credentials not configured' });
   }
 

@@ -15,17 +15,17 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 csv.field_size_limit(sys.maxsize)
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-GTA_USERNAME = os.environ.get('GTA_USERNAME', '')
+GTA_EMAIL = os.environ.get('GTA_EMAIL', '')
 GTA_PASSWORD = os.environ.get('GTA_PASSWORD', '')
 
 # ── Auth ───────────────────────────────────────────────────────────────────
 def get_gta_token():
-    if not GTA_USERNAME or not GTA_PASSWORD:
+    if not GTA_EMAIL or not GTA_PASSWORD:
         return None
     try:
         req = urllib.request.Request(
             'https://api.globaltradealert.org/v1/auth/token/',
-            data=json.dumps({'username': GTA_USERNAME, 'password': GTA_PASSWORD, 'application': 'GTA_WEBSITE'}).encode(),
+            data=json.dumps({'username': GTA_EMAIL, 'password': GTA_PASSWORD, 'application': 'GTA_WEBSITE'}).encode(),
             headers={'Content-Type': 'application/json', 'Origin': 'https://globaltradealert.org', 'Referer': 'https://globaltradealert.org/'},
             method='POST'
         )
@@ -33,7 +33,7 @@ def get_gta_token():
         data = json.loads(resp.read())
         token = data.get('access') or data.get('token')
         if token:
-            print(f"✓ Logged in as {GTA_USERNAME}")
+            print(f"✓ Logged in as {GTA_EMAIL}")
         return token
     except Exception as e:
         print(f"⚠  Login failed: {e}")
@@ -164,7 +164,7 @@ if token:
     print("Using authenticated scraping (full descriptions)")
 else:
     print("Using unauthenticated scraping (truncated ~200 char descriptions)")
-    print("  → Set GTA_USERNAME and GTA_PASSWORD env vars for full descriptions")
+    print("  → Set GTA_EMAIL and GTA_PASSWORD env vars for full descriptions")
 
 print(f"Scraping {len(interventions)} interventions (20 parallel)...")
 scraped, failed = 0, 0
