@@ -57,6 +57,9 @@ function toggleSection(key) {
   sectionOpen[key] = !sectionOpen[key];
   renderSidebar();
 }
+let fredData = null;
+let fredRange = '5Y';
+const fredCharts = {};
 let newsData = null;
 let tradeData = null;
 let gtaData = null;
@@ -228,6 +231,7 @@ function renderContent() {
     renderFacilitiesMap();
     renderProjects();
   } else if (activeTab === "prices") {
+    renderFredPrices();
     renderPrices();
     renderITATariffs();
   }
@@ -594,6 +598,131 @@ function renderProjects() {
   `).join("");
 }
 
+
+// ── FRED Historical Prices ──
+async function renderFredPrices() {
+  const container = document.getElementById("fred-container");
+  if (!container) return;
+
+  if (fredData) { displayFredPrices(); return; }
+
+  const cached = cacheGet("fred_prices_v1", 86400000); // 24h
+  if (cached) { fredData = cached; displayFredPrices(); return; }
+
+  container.innerHTML = `<div class="loading-row"><span class="spinner"></span> Loading historical prices…</div>`;
+
+  try {
+    const r = await fetch("/api/fred");
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    fredData = await r.json();
+    cacheSet("fred_prices_v1", fredData);
+    displayFredPrices();
+  } catch (err) {
+    container.innerHTML = `<div class="empty"><p>Historical prices unavailable (${err.message})</p></div>`;
+  }
+}
+
+function setFredRange(range) {
+  fredRange = range;
+  displayFredPrices();
+}
+
+function fredCutoff() {
+  const years = { "1Y": 1, "3Y": 3, "5Y": 5, "10Y": 10 }[fredRange] || 5;
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - years);
+  return d.toISOString().slice(0, 10);
+}
+
+function fmtCommodityPrice(v) {
+  if (v == null) return "—";
+  if (v >= 10000) return v.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  if (v >= 100)   return v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function displayFredPrices() {
+  for (const id in fredCharts) { fredCharts[id].destroy(); delete fredCharts[id]; }
+
+  const container = document.getElementById("fred-container");
+  if (!fredData?.series?.length) {
+    container.innerHTML = `<div class="empty"><p>No historical price data available.</p></div>`;
+    return;
+  }
+
+  const cutoff = fredCutoff();
+
+  const cards = fredData.series.map(s => {
+    const pts = s.data.filter(d => d.date >= cutoff);
+    if (pts.length < 2) return "";
+    const latest = pts[pts.length - 1].value;
+    const pct = ((latest - pts[0].value) / pts[0].value) * 100;
+    const dir = pct >= 0 ? "up" : "down";
+    const id = "fred-" + s.name.toLowerCase().replace(/\s+/g, "-");
+    return `
+      <div class="fred-card">
+        <div class="fred-card-header">
+          <span class="fred-name">${s.name}</span>
+          <span class="fred-price">${fmtCommodityPrice(latest)}<span class="fred-unit"> ${s.unit}</span></span>
+        </div>
+        <div class="fred-pct ${dir}">${pct >= 0 ? "+" : ""}${pct.toFixed(1)}% (${fredRange})</div>
+        <div class="fred-chart-wrap"><canvas id="${id}"></canvas></div>
+      </div>`;
+  }).join("");
+
+  container.innerHTML = `
+    <div class="fred-controls">
+      ${["1Y","3Y","5Y","10Y"].map(r =>
+        `<button class="fred-range-btn${r === fredRange ? " active" : ""}" onclick="setFredRange('${r}')">${r}</button>`
+      ).join("")}
+    </div>
+    <div class="fred-grid">${cards}</div>`;
+
+  fredData.series.forEach(s => {
+    const pts = s.data.filter(d => d.date >= cutoff);
+    if (pts.length < 2) return;
+    const id = "fred-" + s.name.toLowerCase().replace(/\s+/g, "-");
+    const canvas = document.getElementById(id);
+    if (!canvas) return;
+    const pct = (pts[pts.length - 1].value - pts[0].value) / pts[0].value;
+    const color = pct >= 0 ? "#15803d" : "#b91c1c";
+    fredCharts[id] = new Chart(canvas, {
+      type: "line",
+      data: {
+        labels: pts.map(d => d.date),
+        datasets: [{
+          data: pts.map(d => d.value),
+          borderColor: color,
+          borderWidth: 1.5,
+          fill: true,
+          backgroundColor: pct >= 0 ? "rgba(21,128,61,0.08)" : "rgba(185,28,28,0.08)",
+          pointRadius: 0,
+          tension: 0.2,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            mode: "index",
+            intersect: false,
+            callbacks: {
+              title: ctx => ctx[0].label,
+              label: ctx => `${fmtCommodityPrice(ctx.raw)} ${s.unit}`,
+            },
+          },
+        },
+        scales: {
+          x: { display: false },
+          y: { display: false, grace: "5%" },
+        },
+      },
+    });
+  });
+}
 
 function renderPrices() {
   const filtered = PRICES.filter(p =>

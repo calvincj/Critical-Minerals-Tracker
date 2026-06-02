@@ -466,6 +466,76 @@ main {
   color: #c2410c;
 }
 
+/* ── FRED Historical Price Charts ── */
+.fred-controls {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.fred-range-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.fred-range-btn:hover { border-color: var(--accent); color: var(--accent); }
+.fred-range-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.fred-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.fred-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  transition: border-color 0.15s;
+}
+.fred-card:hover { border-color: #cbd5e1; }
+
+.fred-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 2px;
+  flex-wrap: wrap;
+}
+
+.fred-name { font-size: 14px; font-weight: 600; }
+
+.fred-price {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.fred-unit { font-size: 10px; font-weight: 400; color: var(--text-muted); }
+
+.fred-pct {
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.fred-pct.up   { color: var(--up); }
+.fred-pct.down { color: var(--down); }
+
+.fred-chart-wrap {
+  position: relative;
+  height: 80px;
+}
+
 /* ── Price cards ── */
 .price-grid {
   display: grid;

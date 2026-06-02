@@ -46,6 +46,14 @@
         <!-- Price Movements -->
         <div id="section-prices" class="section">
           <div class="section-header">
+            <h2>Historical Prices</h2>
+            <p>Monthly commodity prices · <a href="https://fred.stlouisfed.org/" target="_blank" rel="noopener noreferrer" style="color:var(--text-muted);text-decoration:none;font-size:12px">Federal Reserve Bank of St. Louis (FRED)</a></p>
+          </div>
+          <div id="fred-container">
+            <div class="loading-row"><span class="spinner"></span> Loading…</div>
+          </div>
+
+          <div class="section-header" style="margin-top:36px">
             <h2>Price Movements <span class="count-badge" id="prices-count">0</span></h2>
             <p>Significant price fluctuations and market-moving events</p>
           </div>
@@ -64,7 +72,8 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="data.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="data.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
