@@ -1,38 +1,37 @@
-// Test multiple candidate IDs per metal to find what FRED actually accepts
-const CANDIDATES = [
-  { name: 'Gold',      unit: 'USD/troy oz',    ids: ['GOLDPMGBD228NLBM','GOLDAMGBD228NLBM','XAUUSD','PGOLDUSDM'], noFreq: true },
-  { name: 'Silver',    unit: 'USD/troy oz',    ids: ['SLVPRUSD','XAGUSD','PSILVUSDM','PSILVERUSDM'],             noFreq: true },
-  { name: 'Platinum',  unit: 'USD/troy oz',    ids: ['PPLTMUSDM','PPLATUSDM','XPTUSX','XPTUSM']                              },
-  { name: 'Palladium', unit: 'USD/troy oz',    ids: ['PPALAUSDM','XPDUSM','PPALLADUSDM','PPALADUSDM']                        },
-  { name: 'Cobalt',    unit: 'USD/metric ton', ids: ['PCOBAUSDM','PCOBALUSDM','COBALT']                                      },
+// Quick probe: one candidate per unknown metal, minimal params
+const PROBES = [
+  { id: 'GOLDAMGBD228NLBM', note: 'gold-lbma-am'     },
+  { id: 'XAUUSD',           note: 'gold-xauusd'       },
+  { id: 'SLVPRUSD',         note: 'silver-lbma'       },
+  { id: 'XAGUSD',           note: 'silver-xagusd'     },
+  { id: 'PPLTMUSDM',        note: 'platinum-pltm'     },
+  { id: 'PPALAUSDM',        note: 'palladium-pala'    },
+  { id: 'PPALLADUSDM',      note: 'palladium-pallad'  },
+  { id: 'PCOBAUSDM',        note: 'cobalt-coba'       },
+  { id: 'PCOBALUSDM',       note: 'cobalt-cobal'      },
 ];
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 module.exports = async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
-
   const apiKey = process.env.FRED_API_KEY;
-  if (!apiKey) return res.status(500).json({ results: [], error: 'FRED_API_KEY not configured' });
+  if (!apiKey) return res.status(500).json({ error: 'no key' });
 
-  const results = [];
-  let i = 0;
-  for (const c of CANDIDATES) {
-    for (const id of c.ids) {
-      if (i++ > 0) await sleep(400);
-      const freqParam = c.noFreq ? '' : '&frequency=m';
-      const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${id}&api_key=${apiKey}&file_type=json&sort_order=asc&observation_start=2020-01-01${freqParam}`;
-      try {
-        const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
-        const body = await r.text();
-        const ok = r.status === 200 && !body.includes('"error_message"');
-        results.push({ metal: c.name, id, status: r.status, ok });
-        if (ok) break; // found a working ID for this metal, skip rest
-      } catch (e) {
-        results.push({ metal: c.name, id, status: 'timeout', ok: false });
-      }
+  const out = [];
+  for (let i = 0; i < PROBES.length; i++) {
+    if (i > 0) await sleep(300);
+    const { id, note } = PROBES[i];
+    try {
+      // minimal params — no observation_start, no sort_order, no frequency
+      const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${id}&api_key=${apiKey}&file_type=json&limit=1`;
+      const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      const text = await r.text();
+      const hasError = text.includes('"error_message"');
+      out.push({ id, note, status: r.status, ok: r.status === 200 && !hasError });
+    } catch (e) {
+      out.push({ id, note, status: 'timeout', ok: false });
     }
   }
-
-  res.json({ results });
+  res.json({ out });
 };
