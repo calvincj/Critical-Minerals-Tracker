@@ -42,20 +42,36 @@ function fmtUSD(n) {
   return `$${n.toLocaleString()}`;
 }
 
-// ── State ──
-const TV_MINERALS = [
-  { name: "Gold",      symbol: "CAPITALCOM:GOLD"     },
-  { name: "Silver",    symbol: "TVC:SILVER"           },
-  { name: "Platinum",  symbol: "CAPITALCOM:PLATINUM"  },
-  { name: "Palladium", symbol: "TVC:PALLADIUM"        },
-  { name: "Copper",    symbol: "CAPITALCOM:COPPER"    },
-  { name: "Nickel",    symbol: "CAPITALCOM:NICKEL"    },
-  { name: "Aluminum",  symbol: "CAPITALCOM:ALUMINUM"  },
-  { name: "Lead",      symbol: "CAPITALCOM:LEAD"      },
-  { name: "Zinc",      symbol: "PEPPERSTONE:ZINC"     },
-  { name: "Cobalt",    symbol: "CAPITALCOM:COBALT"    },
+// ── Strategic Metals price data (Jan snapshots 2018–2026, USD/kg) ──
+// Source: Strategic Metals Invest brochure v4
+const STRATEGIC_METALS = [
+  { name: "Gallium",       category: "Technology Metal",
+    data: [274.37, 355.85, 298.20, 422.70, 648.80, 640.80, 755.80,  940.50, 1963.30] },
+  { name: "Germanium",     category: "Technology Metal",
+    data: [1845.17, 2361.61, 2045.09, 1984.20, 2293.80, 2344.40, 2839.40, 4120.80, 5813.90] },
+  { name: "Hafnium",       category: "Technology Metal",
+    data: [2011.70, 1856.40, 1565.76, 1404.30, 1632.40, 4560.00, 4657.10, 4364.80, 9499.90] },
+  { name: "Indium",        category: "Technology Metal",
+    data: [380.10, 428.61, 315.11, 315.10, 477.10, 442.30, 561.60,  698.80,  832.90] },
+  { name: "Rhenium",       category: "Technology Metal",
+    data: [2118.90, 1869.32, 1711.50, 1405.00, 1730.10, 1606.60, 1995.00, 2485.90, 4760.50] },
+  { name: "Dysprosium",    category: "Rare Earth",
+    data: [238.14, 238.14, 345.24, 411.10, 769.60, 653.40, 587.40,  353.10,  453.90] },
+  { name: "Neodymium",     category: "Rare Earth",
+    data: [70.04,  66.05,  65.00, 109.70, 222.80, 209.30, 113.20,   96.10,  149.30] },
+  { name: "Praseodymium",  category: "Rare Earth",
+    data: [85.68,  80.75,  72.77,  83.40, 217.30, 198.40, 112.80,   96.10,  144.10] },
+  { name: "Terbium",       category: "Rare Earth",
+    data: [581.28, 587.27, 668.01, 1322.10, 3306.00, 4024.90, 2197.70, 1396.50, 1983.40] },
 ];
-const FRED_MINERALS = TV_MINERALS.map(m => m.name);
+const SM_ALL_YEARS  = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026];
+const SM_RANGE_START = { "1Y": 7, "5Y": 3, "ALL": 0 };
+const SM_COLORS = [
+  '#2563eb', '#7c3aed', '#dc2626', '#16a34a', '#d97706',
+  '#0891b2', '#be185d', '#65a30d', '#9333ea',
+];
+const SM_CHART_INSTANCES = {};
+const FRED_MINERALS = STRATEGIC_METALS.map(m => m.name);
 
 let activeTab = "deals";
 let filters = {
@@ -73,7 +89,6 @@ function toggleSection(key) {
   renderSidebar();
 }
 let fredRange = '5Y';
-let tvRenderedRange = null;
 let newsData = null;
 let tradeData = null;
 let gtaData = null;
@@ -613,35 +628,26 @@ function renderProjects() {
 }
 
 
-// ── TradingView Historical Price Charts ──
-const TV_RANGE_MAP = { "1Y": "12M", "5Y": "60M", "ALL": "ALL" };
-
-function renderFredPrices() {
-  displayFredPrices();
-}
+// ── Strategic Metals Historical Price Charts ──
+function renderFredPrices() { displayFredPrices(); }
 
 function setFredRange(range) {
   fredRange = range;
-  tvRenderedRange = null; // force widget recreation
   displayFredPrices();
 }
 
 function displayFredPrices() {
   const container = document.getElementById("fred-container");
   if (!container) return;
-  const tvRange = TV_RANGE_MAP[fredRange] || "12M";
 
-  // Range unchanged → just toggle card visibility without recreating widgets
-  if (tvRenderedRange === tvRange) {
-    TV_MINERALS.forEach(m => {
-      const card = document.getElementById("tv-card-" + m.name.toLowerCase().replace(/\s+/g, "-"));
-      if (card) card.style.display = filters.fredMinerals.has(m.name) ? "" : "none";
-    });
-    return;
-  }
-  tvRenderedRange = tvRange;
+  // Destroy existing Chart.js instances
+  Object.values(SM_CHART_INSTANCES).forEach(c => { try { c.destroy(); } catch(_) {} });
+  for (const k in SM_CHART_INSTANCES) delete SM_CHART_INSTANCES[k];
 
-  // Build grid HTML (no <script> tags — injected separately below)
+  const startIdx = SM_RANGE_START[fredRange] ?? 0;
+  const years = SM_ALL_YEARS.slice(startIdx);
+  const visible = STRATEGIC_METALS.filter(m => filters.fredMinerals.has(m.name));
+
   container.innerHTML = `
     <div class="fred-controls">
       ${["1Y","5Y","ALL"].map(r =>
@@ -649,39 +655,81 @@ function displayFredPrices() {
       ).join("")}
     </div>
     <div class="fred-grid">
-      ${TV_MINERALS.map(m => {
-        const id = m.name.toLowerCase().replace(/\s+/g, "-");
-        const hidden = !filters.fredMinerals.has(m.name) ? ' style="display:none"' : "";
-        return `<div class="fred-card tv-card" id="tv-card-${id}"${hidden}>
-          <div class="tv-widget-wrap" id="tv-wrap-${id}"></div>
-        </div>`;
-      }).join("")}
+      ${visible.length === 0
+        ? `<div class="empty" style="grid-column:1/-1"><p>No metals selected.</p></div>`
+        : visible.map(m => {
+            const id = m.name.toLowerCase().replace(/\s+/g, "-");
+            const cur  = m.data[8];
+            const prev = m.data[7];
+            const yoy  = ((cur - prev) / prev * 100).toFixed(1);
+            const sign = parseFloat(yoy) >= 0 ? "+" : "";
+            const cls  = parseFloat(yoy) >= 0 ? "sm-up" : "sm-down";
+            const fmtCur = cur >= 1000
+              ? cur.toLocaleString('en-US', { maximumFractionDigits: 0 })
+              : cur.toFixed(2);
+            const catCls = m.category === "Technology Metal" ? "sm-cat-tech" : "sm-cat-re";
+            return `<div class="fred-card sm-card" id="tv-card-${id}">
+              <div class="sm-card-header">
+                <div>
+                  <div class="sm-card-name">${m.name}</div>
+                  <span class="sm-cat-badge ${catCls}">${m.category}</span>
+                </div>
+                <div class="sm-card-price">
+                  <div class="sm-price-value">$${fmtCur}/kg</div>
+                  <div class="sm-price-change ${cls}">${sign}${yoy}% YoY</div>
+                </div>
+              </div>
+              <div class="sm-chart-wrap"><canvas id="chart-${id}"></canvas></div>
+              <div class="sm-card-footer">Jan snapshot · USD/kg · Strategic Metals Invest</div>
+            </div>`;
+          }).join("")
+      }
     </div>`;
 
-  // Inject TradingView widget scripts (innerHTML won't execute scripts — must use createElement)
-  TV_MINERALS.forEach(m => {
-    const id = m.name.toLowerCase().replace(/\s+/g, "-");
-    const wrap = document.getElementById("tv-wrap-" + id);
-    if (!wrap) return;
-    wrap.className = "tradingview-widget-container tv-widget-wrap";
-    const inner = document.createElement("div");
-    inner.className = "tradingview-widget-container__widget";
-    wrap.appendChild(inner);
-    const script = document.createElement("script");
-    script.type = "text/javascript";
-    script.async = true;
-    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js";
-    script.textContent = JSON.stringify({
-      symbol: m.symbol,
-      width: "100%",
-      height: 200,
-      locale: "en",
-      dateRange: tvRange,
-      colorTheme: "light",
-      isTransparent: true,
-      autosize: true,
+  requestAnimationFrame(() => {
+    visible.forEach(m => {
+      const id = m.name.toLowerCase().replace(/\s+/g, "-");
+      const canvas = document.getElementById("chart-" + id);
+      if (!canvas) return;
+      const color = SM_COLORS[STRATEGIC_METALS.indexOf(m) % SM_COLORS.length];
+      SM_CHART_INSTANCES[id] = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels: years.map(String),
+          datasets: [{
+            data: m.data.slice(startIdx),
+            borderColor: color,
+            backgroundColor: color + '18',
+            fill: true,
+            tension: 0.35,
+            pointRadius: 4,
+            pointBackgroundColor: color,
+            borderWidth: 2,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: ctx => `$${Number(ctx.raw).toLocaleString('en-US', { maximumFractionDigits: 2 })} / kg`
+              }
+            }
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+            y: {
+              ticks: {
+                font: { size: 11 },
+                callback: v => v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v}`,
+              }
+            }
+          }
+        }
+      });
     });
-    wrap.appendChild(script);
   });
 }
 
