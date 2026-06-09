@@ -86,7 +86,7 @@ let filters = {
   countries: new Set(COUNTRIES),
   fredMinerals: new Set(ALL_PRICE_METALS),
 };
-const sectionOpen = { dealTypes: true, minerals: true, projectTypes: true, countries: false, fredMinerals: true };
+const sectionOpen = { dealTypes: true, minerals: true, projectTypes: true, countries: true, fredMinerals: true };
 
 function toggleSection(key) {
   sectionOpen[key] = !sectionOpen[key];
