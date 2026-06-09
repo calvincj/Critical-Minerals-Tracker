@@ -636,8 +636,19 @@ function renderProjects() {
 // ── Price chart helpers ──
 function smId(name) { return name.toLowerCase().replace(/\s+/g, '-'); }
 
-function fmtFREDLabel(d) {
-  return d.slice(0, 7); // "YYYY-MM" — used internally; axis shows year only on Jan
+function annualAvg(monthlyData, startYear) {
+  const byYear = {};
+  monthlyData.forEach(({ date, value }) => {
+    const y = parseInt(date.slice(0, 4));
+    if (y >= startYear) {
+      if (!byYear[y]) byYear[y] = [];
+      byYear[y].push(value);
+    }
+  });
+  return Object.keys(byYear).sort().map(y => ({
+    year: parseInt(y),
+    value: byYear[y].reduce((s, v) => s + v, 0) / byYear[y].length,
+  }));
 }
 
 async function loadFredBaseData() {
@@ -762,15 +773,16 @@ async function displayFredPrices() {
       slot.innerHTML = `<div class="sm-card-header"><div class="sm-card-name">${name}</div><div class="sm-card-footer" style="color:var(--text-muted);font-size:11px">Unavailable</div></div>`;
       return;
     }
-    const fd = series.data.filter(d => new Date(d.date) >= cutoff);
-    const cur  = fd.length ? fd[fd.length - 1].value : null;
-    const prev = fd.length >= 13 ? fd[fd.length - 13].value : null;
+    const startYear = fredRange === '5Y' ? new Date().getFullYear() - 5 : 2010;
+    const annual = annualAvg(series.data, startYear);
+    const cur  = annual.length ? annual[annual.length - 1].value : null;
+    const prev = annual.length >= 2 ? annual[annual.length - 2].value : null;
     const yoy  = (cur && prev) ? ((cur - prev) / prev * 100).toFixed(1) : null;
     const sign = yoy && parseFloat(yoy) >= 0 ? '+' : '';
     const yCls = yoy && parseFloat(yoy) >= 0 ? 'sm-up' : 'sm-down';
     const fmtC = cur === null ? '—'
       : cur >= 1000 ? cur.toLocaleString('en-US', { maximumFractionDigits: 0 }) : cur.toFixed(2);
-    const id   = smId(name);
+    const id    = smId(name);
     const color = FRED_BASE_COLORS[idx % FRED_BASE_COLORS.length];
 
     slot.id = '';
@@ -787,7 +799,7 @@ async function displayFredPrices() {
         </div>
       </div>
       <div class="sm-chart-wrap"><canvas id="chart-fred-${id}"></canvas></div>
-      <div class="sm-card-footer">${series.unit} · FRED / IMF</div>`;
+      <div class="sm-card-footer">${series.unit} · annual avg · FRED / IMF</div>`;
 
     requestAnimationFrame(() => {
       const canvas = document.getElementById('chart-fred-' + id);
@@ -795,14 +807,14 @@ async function displayFredPrices() {
       SM_CHART_INSTANCES['fred-' + id] = new Chart(canvas, {
         type: 'line',
         data: {
-          labels: fd.map(d => fmtFREDLabel(d.date)),
-          datasets: [{ data: fd.map(d => d.value), borderColor: color, backgroundColor: color + '18', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 }]
+          labels: annual.map(d => String(d.year)),
+          datasets: [{ data: annual.map(d => d.value), borderColor: color, backgroundColor: color + '18', fill: true, tension: 0.35, pointRadius: 4, pointBackgroundColor: color, borderWidth: 2 }]
         },
         options: {
           responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `$${Number(ctx.raw).toLocaleString('en-US', { maximumFractionDigits: 0 })}` } } },
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `$${Number(ctx.raw).toLocaleString('en-US', { maximumFractionDigits: 0 })} avg` } } },
           scales: {
-            x: { grid: { display: false }, ticks: { font: { size: 11 }, maxRotation: 0, callback: function(val) { const lbl = this.getLabelForValue(val); return lbl && lbl.endsWith('-01') ? lbl.slice(0, 4) : ''; } } },
+            x: { grid: { display: false }, ticks: { font: { size: 11 }, maxRotation: 0 } },
             y: { ticks: { font: { size: 11 }, callback: v => v >= 1000 ? `$${(v/1000).toFixed(1)}k` : `$${v}` } }
           }
         }
