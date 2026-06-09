@@ -774,14 +774,14 @@ async function displayFredPrices() {
       return;
     }
     const startYear = fredRange === '5Y' ? SM_ALL_YEARS[SM_RANGE_START['5Y']] : SM_ALL_YEARS[0];
-    const annual = annualAvg(series.data, startYear);
+    const annual = annualAvg(series.data, startYear).map(d => ({ year: d.year, value: d.value / 1000 }));
     const cur  = annual.length ? annual[annual.length - 1].value : null;
     const prev = annual.length >= 2 ? annual[annual.length - 2].value : null;
     const yoy  = (cur && prev) ? ((cur - prev) / prev * 100).toFixed(1) : null;
     const sign = yoy && parseFloat(yoy) >= 0 ? '+' : '';
     const yCls = yoy && parseFloat(yoy) >= 0 ? 'sm-up' : 'sm-down';
     const fmtC = cur === null ? '—'
-      : cur >= 1000 ? cur.toLocaleString('en-US', { maximumFractionDigits: 0 }) : cur.toFixed(2);
+      : cur >= 1 ? cur.toFixed(2) : cur.toFixed(3);
     const id    = smId(name);
     const color = FRED_BASE_COLORS[idx % FRED_BASE_COLORS.length];
 
@@ -794,12 +794,12 @@ async function displayFredPrices() {
           <span class="sm-cat-badge sm-cat-common">Industrial Metal</span>
         </div>
         <div class="sm-card-price">
-          <div class="sm-price-value">$${fmtC}</div>
+          <div class="sm-price-value">$${fmtC}/kg</div>
           ${yoy !== null ? `<div class="sm-price-change ${yCls}">${sign}${yoy}% YoY</div>` : ''}
         </div>
       </div>
       <div class="sm-chart-wrap"><canvas id="chart-fred-${id}"></canvas></div>
-      <div class="sm-card-footer">${series.unit} · annual avg · FRED / IMF</div>`;
+      <div class="sm-card-footer">USD/kg · annual avg · FRED / IMF</div>`;
 
     requestAnimationFrame(() => {
       const canvas = document.getElementById('chart-fred-' + id);
@@ -812,10 +812,10 @@ async function displayFredPrices() {
         },
         options: {
           responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `$${Number(ctx.raw).toLocaleString('en-US', { maximumFractionDigits: 0 })} avg` } } },
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `$${Number(ctx.raw).toFixed(2)}/kg avg` } } },
           scales: {
             x: { grid: { display: false }, ticks: { font: { size: 11 }, maxRotation: 0 } },
-            y: { ticks: { font: { size: 11 }, callback: v => v >= 1000 ? `$${(v/1000).toFixed(1)}k` : `$${v}` } }
+            y: { ticks: { font: { size: 11 }, callback: v => `$${v.toFixed(2)}` } }
           }
         }
       });
