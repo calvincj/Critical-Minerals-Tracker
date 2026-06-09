@@ -73,8 +73,8 @@ const SM_COLORS = [
 const SM_CHART_INSTANCES = {};
 const FRED_MINERALS = STRATEGIC_METALS.map(m => m.name);
 
-const FRED_BASE_METALS = ['Copper', 'Nickel', 'Aluminum', 'Lead', 'Zinc', 'Cobalt'];
-const FRED_BASE_COLORS = ['#ea580c', '#ca8a04', '#0d9488', '#7c3aed', '#1d4ed8', '#be185d'];
+const FRED_BASE_METALS = ['Copper', 'Nickel', 'Aluminum', 'Lead', 'Zinc', 'Tin', 'Iron Ore'];
+const FRED_BASE_COLORS = ['#ea580c', '#ca8a04', '#0d9488', '#7c3aed', '#1d4ed8', '#be185d', '#15803d'];
 const ALL_PRICE_METALS = [...FRED_MINERALS, ...FRED_BASE_METALS];
 
 let activeTab = "deals";
@@ -642,14 +642,14 @@ function fmtFREDLabel(d) {
 
 async function loadFredBaseData() {
   if (fredBaseData) return;
-  const cached = cacheGet('fred_base_v1', 86400000);
+  const cached = cacheGet('fred_base_v2', 86400000);
   if (cached) { fredBaseData = cached; return; }
   try {
     const r = await fetch('/api/fred');
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const json = await r.json();
     fredBaseData = json.series || [];
-    cacheSet('fred_base_v1', fredBaseData);
+    cacheSet('fred_base_v2', fredBaseData);
   } catch (err) {
     console.error('[fred]', err.message);
     fredBaseData = [];
