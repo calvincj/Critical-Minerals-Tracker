@@ -1,12 +1,10 @@
 // Base metal price data from FRED (IMF Primary Commodity Prices, monthly)
 const SERIES = [
-  { id: 'PCOPPUSDM',  name: 'Copper',    unit: 'USD/metric ton' },
-  { id: 'PNICKUSDM',  name: 'Nickel',    unit: 'USD/metric ton' },
-  { id: 'PALUMUSDM',  name: 'Aluminum',  unit: 'USD/metric ton' },
-  { id: 'PLEADUSDM',  name: 'Lead',      unit: 'USD/metric ton' },
-  { id: 'PZINCUSDM',  name: 'Zinc',      unit: 'USD/metric ton' },
-  { id: 'PTINUSDM',   name: 'Tin',       unit: 'USD/metric ton' },
-  { id: 'PIORECRUSDM',name: 'Iron Ore',  unit: 'USD/dry metric ton' },
+  { id: 'PCOPPUSDM', name: 'Copper',   unit: 'USD/metric ton' },
+  { id: 'PNICKUSDM', name: 'Nickel',   unit: 'USD/metric ton' },
+  { id: 'PALUMUSDM', name: 'Aluminum', unit: 'USD/metric ton' },
+  { id: 'PLEADUSDM', name: 'Lead',     unit: 'USD/metric ton' },
+  { id: 'PZINCUSDM', name: 'Zinc',     unit: 'USD/metric ton' },
 ];
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));

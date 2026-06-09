@@ -73,8 +73,8 @@ const SM_COLORS = [
 const SM_CHART_INSTANCES = {};
 const FRED_MINERALS = STRATEGIC_METALS.map(m => m.name);
 
-const FRED_BASE_METALS = ['Copper', 'Nickel', 'Aluminum', 'Lead', 'Zinc', 'Tin', 'Iron Ore'];
-const FRED_BASE_COLORS = ['#ea580c', '#ca8a04', '#0d9488', '#7c3aed', '#1d4ed8', '#be185d', '#15803d'];
+const FRED_BASE_METALS = ['Copper', 'Nickel', 'Aluminum', 'Lead', 'Zinc'];
+const FRED_BASE_COLORS = ['#ea580c', '#ca8a04', '#0d9488', '#7c3aed', '#1d4ed8'];
 const ALL_PRICE_METALS = [...FRED_MINERALS, ...FRED_BASE_METALS];
 
 let activeTab = "deals";
