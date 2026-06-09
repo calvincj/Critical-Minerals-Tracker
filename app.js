@@ -65,13 +65,19 @@ const STRATEGIC_METALS = [
     data: [581.28, 587.27, 668.01, 1322.10, 3306.00, 4024.90, 2197.70, 1396.50, 1983.40] },
 ];
 const SM_ALL_YEARS  = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026];
-const SM_RANGE_START = { "1Y": 7, "5Y": 3, "ALL": 0 };
+const SM_RANGE_START = { "5Y": 3, "ALL": 0 };
 const SM_COLORS = [
   '#2563eb', '#7c3aed', '#dc2626', '#16a34a', '#d97706',
   '#0891b2', '#be185d', '#65a30d', '#9333ea',
 ];
 const SM_CHART_INSTANCES = {};
 const FRED_MINERALS = STRATEGIC_METALS.map(m => m.name);
+
+const WB_METALS_LIST = ['Copper', 'Nickel', 'Cobalt', 'Aluminum', 'Zinc', 'Lead', 'Gold', 'Silver', 'Platinum'];
+const WB_COLORS = [
+  '#ea580c', '#ca8a04', '#0d9488', '#7c3aed', '#1d4ed8',
+  '#be185d', '#65a30d', '#9333ea', '#0891b2',
+];
 
 let activeTab = "deals";
 let filters = {
@@ -81,14 +87,16 @@ let filters = {
   priceDirection: new Set(["up", "down"]),
   countries: new Set(COUNTRIES),
   fredMinerals: new Set(FRED_MINERALS),
+  wbMinerals: new Set(WB_METALS_LIST),
 };
-const sectionOpen = { dealTypes: true, minerals: true, projectTypes: true, countries: false, fredMinerals: true };
+const sectionOpen = { dealTypes: true, minerals: true, projectTypes: true, countries: false, fredMinerals: true, wbMinerals: true };
 
 function toggleSection(key) {
   sectionOpen[key] = !sectionOpen[key];
   renderSidebar();
 }
-let fredRange = '5Y';
+let fredRange = 'ALL';
+let wbData = null;
 let newsData = null;
 let tradeData = null;
 let gtaData = null;
@@ -128,7 +136,9 @@ function renderSidebar() {
       buildCheckboxGroup("Project Type", "projectTypes", PROJECT_TYPES) +
       buildMineralFilter(icmmMinerals);
   } else if (activeTab === "prices") {
-    aside.innerHTML = buildCheckboxGroup("Mineral", "fredMinerals", FRED_MINERALS);
+    aside.innerHTML =
+      buildCheckboxGroup("Strategic Metals", "fredMinerals", FRED_MINERALS) +
+      buildCheckboxGroup("Common Metals", "wbMinerals", WB_METALS_LIST);
   }
 }
 
@@ -139,7 +149,8 @@ function buildSectionHeader(title, key) {
     : key === "dealTypes" ? DEAL_TYPES.length
     : key === "minerals" ? MINERALS.length
     : key === "projectTypes" ? PROJECT_TYPES.length
-    : key === "fredMinerals" ? FRED_MINERALS.length : null;
+    : key === "fredMinerals" ? FRED_MINERALS.length
+    : key === "wbMinerals" ? WB_METALS_LIST.length : null;
   const countLabel = (!open && selected !== null && selected < total)
     ? ` <span class="filter-count">${selected}/${total}</span>` : "";
   return `<div class="filter-header">
@@ -221,6 +232,7 @@ function selectSection(key) {
   else if (key === "countries") filters.countries = new Set(COUNTRIES);
   else if (key === "projectTypes") filters.projectTypes = new Set(PROJECT_TYPES);
   else if (key === "fredMinerals") filters.fredMinerals = new Set(FRED_MINERALS);
+  else if (key === "wbMinerals") filters.wbMinerals = new Set(WB_METALS_LIST);
   renderSidebar();
   renderContent();
 }
@@ -628,7 +640,122 @@ function renderProjects() {
 }
 
 
-// ── Strategic Metals Historical Price Charts ──
+// ── Price chart helpers ──
+function smId(name) { return name.toLowerCase().replace(/\s+/g, '-'); }
+
+function parseWBDate(d) {
+  const [y, m] = d.split('M');
+  return new Date(parseInt(y), parseInt(m) - 1, 1);
+}
+function fmtWBLabel(d) {
+  return parseWBDate(d).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
+async function loadWBData() {
+  if (wbData) return;
+  const cached = cacheGet('wb_metals_v1', 43200000); // 12h
+  if (cached) { wbData = cached; return; }
+  try {
+    const r = await fetch('/api/worldbank');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const json = await r.json();
+    wbData = json.series || [];
+    cacheSet('wb_metals_v1', wbData);
+  } catch (err) {
+    console.error('[worldbank]', err.message);
+    wbData = [];
+  }
+}
+
+function renderWBGrid() {
+  const grid = document.getElementById('grid-wb');
+  if (!grid) return;
+
+  if (!wbData || wbData.length === 0) {
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><p>Price data unavailable.</p></div>`;
+    return;
+  }
+
+  const visible = wbData.filter(s => filters.wbMinerals.has(s.name));
+  if (visible.length === 0) {
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><p>No metals selected.</p></div>`;
+    return;
+  }
+
+  const cutoff = new Date();
+  if (fredRange === '5Y') cutoff.setFullYear(cutoff.getFullYear() - 5);
+  else cutoff.setFullYear(2000);
+
+  grid.innerHTML = visible.map(s => {
+    const id = smId(s.name);
+    const fd = s.data.filter(d => parseWBDate(d.date) >= cutoff);
+    const cur   = fd.length ? fd[fd.length - 1].value : null;
+    const prev  = fd.length >= 13 ? fd[fd.length - 13].value : null;
+    const yoy   = (cur && prev) ? ((cur - prev) / prev * 100).toFixed(1) : null;
+    const sign  = yoy && parseFloat(yoy) >= 0 ? '+' : '';
+    const yCls  = yoy && parseFloat(yoy) >= 0 ? 'sm-up' : 'sm-down';
+    const fmtC  = cur === null ? '—'
+      : cur >= 1000 ? cur.toLocaleString('en-US', { maximumFractionDigits: 0 })
+      : cur.toFixed(2);
+    return `<div class="fred-card sm-card">
+      <div class="sm-card-header">
+        <div>
+          <div class="sm-card-name">${s.name}</div>
+          <span class="sm-cat-badge sm-cat-common">Common Metal</span>
+        </div>
+        <div class="sm-card-price">
+          <div class="sm-price-value">$${fmtC}</div>
+          ${yoy !== null ? `<div class="sm-price-change ${yCls}">${sign}${yoy}% YoY</div>` : ''}
+        </div>
+      </div>
+      <div class="sm-chart-wrap"><canvas id="chart-wb-${id}"></canvas></div>
+      <div class="sm-card-footer">${s.unit} · World Bank Pink Sheet</div>
+    </div>`;
+  }).join('');
+
+  requestAnimationFrame(() => {
+    visible.forEach((s, idx) => {
+      const id = smId(s.name);
+      const canvas = document.getElementById('chart-wb-' + id);
+      if (!canvas) return;
+      const fd = s.data.filter(d => parseWBDate(d.date) >= cutoff);
+      const color = WB_COLORS[idx % WB_COLORS.length];
+      SM_CHART_INSTANCES['wb-' + id] = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels: fd.map(d => fmtWBLabel(d.date)),
+          datasets: [{
+            data: fd.map(d => d.value),
+            borderColor: color,
+            backgroundColor: color + '18',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 0,
+            borderWidth: 2,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: ctx => `$${Number(ctx.raw).toLocaleString('en-US', { maximumFractionDigits: 2 })}`,
+              }
+            }
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { font: { size: 11 }, maxTicksLimit: 6, maxRotation: 0 } },
+            y: { ticks: { font: { size: 11 }, callback: v => v >= 1000 ? `$${(v/1000).toFixed(1)}k` : `$${v}` } }
+          }
+        }
+      });
+    });
+  });
+}
+
+// ── Historical Price Charts ──
 function renderFredPrices() { displayFredPrices(); }
 
 function setFredRange(range) {
@@ -636,38 +763,38 @@ function setFredRange(range) {
   displayFredPrices();
 }
 
-function displayFredPrices() {
-  const container = document.getElementById("fred-container");
+async function displayFredPrices() {
+  const container = document.getElementById('fred-container');
   if (!container) return;
 
-  // Destroy existing Chart.js instances
   Object.values(SM_CHART_INSTANCES).forEach(c => { try { c.destroy(); } catch(_) {} });
   for (const k in SM_CHART_INSTANCES) delete SM_CHART_INSTANCES[k];
 
   const startIdx = SM_RANGE_START[fredRange] ?? 0;
   const years = SM_ALL_YEARS.slice(startIdx);
-  const visible = STRATEGIC_METALS.filter(m => filters.fredMinerals.has(m.name));
+  const visStrategic = STRATEGIC_METALS.filter(m => filters.fredMinerals.has(m.name));
 
   container.innerHTML = `
     <div class="fred-controls">
-      ${["1Y","5Y","ALL"].map(r =>
+      ${["5Y","ALL"].map(r =>
         `<button class="fred-range-btn${r === fredRange ? " active" : ""}" onclick="setFredRange('${r}')">${r}</button>`
       ).join("")}
     </div>
+    <div class="price-section-label">Strategic &amp; Rare Earth Metals
+      <span class="price-section-sub">Annual Jan snapshots (USD/kg) · Strategic Metals Invest</span>
+    </div>
     <div class="fred-grid">
-      ${visible.length === 0
+      ${visStrategic.length === 0
         ? `<div class="empty" style="grid-column:1/-1"><p>No metals selected.</p></div>`
-        : visible.map(m => {
-            const id = m.name.toLowerCase().replace(/\s+/g, "-");
-            const cur  = m.data[8];
-            const prev = m.data[7];
+        : visStrategic.map(m => {
+            const id   = smId(m.name);
+            const cur  = m.data[8], prev = m.data[7];
             const yoy  = ((cur - prev) / prev * 100).toFixed(1);
-            const sign = parseFloat(yoy) >= 0 ? "+" : "";
-            const cls  = parseFloat(yoy) >= 0 ? "sm-up" : "sm-down";
-            const fmtCur = cur >= 1000
-              ? cur.toLocaleString('en-US', { maximumFractionDigits: 0 })
-              : cur.toFixed(2);
-            const catCls = m.category === "Technology Metal" ? "sm-cat-tech" : "sm-cat-re";
+            const sign = parseFloat(yoy) >= 0 ? '+' : '';
+            const cls  = parseFloat(yoy) >= 0 ? 'sm-up' : 'sm-down';
+            const fmtC = cur >= 1000
+              ? cur.toLocaleString('en-US', { maximumFractionDigits: 0 }) : cur.toFixed(2);
+            const catCls = m.category === 'Technology Metal' ? 'sm-cat-tech' : 'sm-cat-re';
             return `<div class="fred-card sm-card" id="tv-card-${id}">
               <div class="sm-card-header">
                 <div>
@@ -675,21 +802,27 @@ function displayFredPrices() {
                   <span class="sm-cat-badge ${catCls}">${m.category}</span>
                 </div>
                 <div class="sm-card-price">
-                  <div class="sm-price-value">$${fmtCur}/kg</div>
+                  <div class="sm-price-value">$${fmtC}/kg</div>
                   <div class="sm-price-change ${cls}">${sign}${yoy}% YoY</div>
                 </div>
               </div>
               <div class="sm-chart-wrap"><canvas id="chart-${id}"></canvas></div>
-              <div class="sm-card-footer">Jan snapshot · USD/kg · Strategic Metals Invest</div>
+              <div class="sm-card-footer">Jan 2026 · USD/kg · Strategic Metals Invest</div>
             </div>`;
-          }).join("")
+          }).join('')
       }
+    </div>
+    <div class="price-section-label">Common Metals
+      <span class="price-section-sub">Monthly exchange prices · World Bank Pink Sheet</span>
+    </div>
+    <div class="fred-grid" id="grid-wb">
+      <div class="loading-row" style="grid-column:1/-1"><span class="spinner"></span> Loading…</div>
     </div>`;
 
   requestAnimationFrame(() => {
-    visible.forEach(m => {
-      const id = m.name.toLowerCase().replace(/\s+/g, "-");
-      const canvas = document.getElementById("chart-" + id);
+    visStrategic.forEach(m => {
+      const id = smId(m.name);
+      const canvas = document.getElementById('chart-' + id);
       if (!canvas) return;
       const color = SM_COLORS[STRATEGIC_METALS.indexOf(m) % SM_COLORS.length];
       SM_CHART_INSTANCES[id] = new Chart(canvas, {
@@ -712,25 +845,19 @@ function displayFredPrices() {
           maintainAspectRatio: false,
           plugins: {
             legend: { display: false },
-            tooltip: {
-              callbacks: {
-                label: ctx => `$${Number(ctx.raw).toLocaleString('en-US', { maximumFractionDigits: 2 })} / kg`
-              }
-            }
+            tooltip: { callbacks: { label: ctx => `$${Number(ctx.raw).toLocaleString('en-US', { maximumFractionDigits: 2 })} / kg` } }
           },
           scales: {
             x: { grid: { display: false }, ticks: { font: { size: 11 } } },
-            y: {
-              ticks: {
-                font: { size: 11 },
-                callback: v => v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v}`,
-              }
-            }
+            y: { ticks: { font: { size: 11 }, callback: v => v >= 1000 ? `$${(v/1000).toFixed(1)}k` : `$${v}` } }
           }
         }
       });
     });
   });
+
+  await loadWBData();
+  renderWBGrid();
 }
 
 function renderPrices() {
@@ -1075,6 +1202,7 @@ async function prefetchInBackground() {
     loadGTALiveData(),
     loadFacilitiesData(),
     loadNewsData(),
+    loadWBData(),
   ]);
   fetchGTADescriptionsInBackground();
 }

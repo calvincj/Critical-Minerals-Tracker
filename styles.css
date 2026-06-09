@@ -516,8 +516,9 @@ main {
   font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px;
   letter-spacing: 0.02em; display: inline-block;
 }
-.sm-cat-tech { background: #eff6ff; color: #1d4ed8; }
-.sm-cat-re   { background: #f0fdf4; color: #15803d; }
+.sm-cat-tech   { background: #eff6ff; color: #1d4ed8; }
+.sm-cat-re     { background: #f0fdf4; color: #15803d; }
+.sm-cat-common { background: #fff7ed; color: #c2410c; }
 .sm-card-price { text-align: right; flex-shrink: 0; }
 .sm-price-value { font-size: 15px; font-weight: 700; color: var(--text); }
 .sm-price-change { font-size: 12px; font-weight: 600; margin-top: 3px; }
@@ -526,6 +527,21 @@ main {
 .sm-chart-wrap { padding: 0 12px; height: 160px; position: relative; }
 .sm-card-footer {
   font-size: 11px; color: var(--text-muted); padding: 6px 16px 12px;
+}
+
+.price-section-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 20px 0 10px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.price-section-sub {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
 }
 
 /* ── Price cards ── */
