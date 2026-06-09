@@ -637,7 +637,7 @@ function renderProjects() {
 function smId(name) { return name.toLowerCase().replace(/\s+/g, '-'); }
 
 function fmtFREDLabel(d) {
-  return new Date(d + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  return d.slice(0, 7); // "YYYY-MM" — used internally; axis shows year only on Jan
 }
 
 async function loadFredBaseData() {
@@ -802,7 +802,7 @@ async function displayFredPrices() {
           responsive: true, maintainAspectRatio: false,
           plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `$${Number(ctx.raw).toLocaleString('en-US', { maximumFractionDigits: 0 })}` } } },
           scales: {
-            x: { grid: { display: false }, ticks: { font: { size: 11 }, maxTicksLimit: 6, maxRotation: 0 } },
+            x: { grid: { display: false }, ticks: { font: { size: 11 }, maxRotation: 0, callback: function(val) { const lbl = this.getLabelForValue(val); return lbl && lbl.endsWith('-01') ? lbl.slice(0, 4) : ''; } } },
             y: { ticks: { font: { size: 11 }, callback: v => v >= 1000 ? `$${(v/1000).toFixed(1)}k` : `$${v}` } }
           }
         }
