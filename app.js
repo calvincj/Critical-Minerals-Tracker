@@ -45,15 +45,15 @@ function fmtUSD(n) {
 // ── Strategic Metals price data (Jan snapshots 2018–2026, USD/kg) ──
 // Source: Strategic Metals Invest brochure v4
 const STRATEGIC_METALS = [
-  { name: "Gallium",       category: "Technology Metal",
+  { name: "Gallium",       category: "Strategic Metal",
     data: [274.37, 355.85, 298.20, 422.70, 648.80, 640.80, 755.80,  940.50, 1963.30] },
-  { name: "Germanium",     category: "Technology Metal",
+  { name: "Germanium",     category: "Strategic Metal",
     data: [1845.17, 2361.61, 2045.09, 1984.20, 2293.80, 2344.40, 2839.40, 4120.80, 5813.90] },
-  { name: "Hafnium",       category: "Technology Metal",
+  { name: "Hafnium",       category: "Strategic Metal",
     data: [2011.70, 1856.40, 1565.76, 1404.30, 1632.40, 4560.00, 4657.10, 4364.80, 9499.90] },
-  { name: "Indium",        category: "Technology Metal",
+  { name: "Indium",        category: "Strategic Metal",
     data: [380.10, 428.61, 315.11, 315.10, 477.10, 442.30, 561.60,  698.80,  832.90] },
-  { name: "Rhenium",       category: "Technology Metal",
+  { name: "Rhenium",       category: "Strategic Metal",
     data: [2118.90, 1869.32, 1711.50, 1405.00, 1730.10, 1606.60, 1995.00, 2485.90, 4760.50] },
   { name: "Dysprosium",    category: "Rare Earth",
     data: [238.14, 238.14, 345.24, 411.10, 769.60, 653.40, 587.40,  353.10,  453.90] },
@@ -702,7 +702,7 @@ async function displayFredPrices() {
           const cls  = parseFloat(yoy) >= 0 ? 'sm-up' : 'sm-down';
           const fmtC = cur >= 1000
             ? cur.toLocaleString('en-US', { maximumFractionDigits: 0 }) : cur.toFixed(2);
-          const catCls = m.category === 'Technology Metal' ? 'sm-cat-tech' : 'sm-cat-re';
+          const catCls = m.category === 'Strategic Metal' ? 'sm-cat-tech' : 'sm-cat-re';
           return `<div class="fred-card sm-card">
             <div class="sm-card-header">
               <div>
@@ -773,7 +773,7 @@ async function displayFredPrices() {
       slot.innerHTML = `<div class="sm-card-header"><div class="sm-card-name">${name}</div><div class="sm-card-footer" style="color:var(--text-muted);font-size:11px">Unavailable</div></div>`;
       return;
     }
-    const startYear = fredRange === '5Y' ? new Date().getFullYear() - 5 : 2010;
+    const startYear = fredRange === '5Y' ? SM_ALL_YEARS[SM_RANGE_START['5Y']] : SM_ALL_YEARS[0];
     const annual = annualAvg(series.data, startYear);
     const cur  = annual.length ? annual[annual.length - 1].value : null;
     const prev = annual.length >= 2 ? annual[annual.length - 2].value : null;
@@ -791,7 +791,7 @@ async function displayFredPrices() {
       <div class="sm-card-header">
         <div>
           <div class="sm-card-name">${name}</div>
-          <span class="sm-cat-badge sm-cat-common">Base Metal</span>
+          <span class="sm-cat-badge sm-cat-common">Industrial Metal</span>
         </div>
         <div class="sm-card-price">
           <div class="sm-price-value">$${fmtC}</div>
